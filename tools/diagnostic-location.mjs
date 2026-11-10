@@ -1,0 +1,30 @@
+const reviewedPaths = new Set([
+  ".github/workflows/ci.yml",
+  ".gitleaks.toml",
+  "package.json",
+  "pnpm-lock.yaml",
+  "src/cli.ts",
+  "src/session/state.ts",
+  "src/session/tcp.ts",
+  "src/wire/codec8.ts",
+  "tests/architecture.test.mjs",
+  "tests/codec8.test.ts",
+  "tests/comments.test.mjs",
+  "tests/peer.ts",
+  "tests/quality.test.mjs",
+  "tests/tcp.test.ts",
+  "tests/typecheck.test.mjs",
+  "tools/architecture.mjs",
+  "tools/diagnostic-location.mjs",
+  "tools/secrets.mjs",
+]);
+
+/**
+ * Publishes only paths reviewed in code. Even a tracked or syntactically valid
+ * filename can contain private data or CI control characters.
+ *
+ * @param {string} path
+ */
+export function reviewedPath(path) {
+  return reviewedPaths.has(path) ? path : undefined;
+}

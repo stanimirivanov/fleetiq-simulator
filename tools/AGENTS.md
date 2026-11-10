@@ -22,3 +22,13 @@ and [require-description](https://github.com/gajus/eslint-plugin-jsdoc/blob/main
 Six lines is the local threshold for requiring JSDoc on functions. Existing
 function JSDoc needs a summary regardless of length. Review the summary for
 accuracy and usefulness.
+
+Architecture diagnostics give the rule and a recovery step. The location and
+module are shown only when reviewed, since paths and module names can contain
+private data. Update `tools/diagnostic-location.mjs` when adding a path that is
+safe to publish.
+
+Secret scan failures name the worktree, index or history phase. Findings report
+the total count and safe metadata for the first finding. Unreviewed names and
+locations are withheld. Inspect the affected scan privately when metadata is
+withheld or when multiple findings are present. Never attach a raw report.
