@@ -5,7 +5,7 @@ const reviewedPaths = new Set([
   "pnpm-lock.yaml",
   "src/cli.ts",
   "src/session/state.ts",
-  "src/session/tcp.ts",
+  "src/transport/tcp.ts",
   "src/wire/codec8.ts",
   "tests/architecture.test.mjs",
   "tests/codec8.test.ts",
@@ -14,9 +14,11 @@ const reviewedPaths = new Set([
   "tests/quality.test.mjs",
   "tests/tcp.test.ts",
   "tests/typecheck.test.mjs",
+  "tests/transport-load.test.mjs",
   "tools/architecture.mjs",
   "tools/diagnostic-location.mjs",
   "tools/secrets.mjs",
+  "tools/wire-ambient.mjs",
 ]);
 
 /**

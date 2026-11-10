@@ -4,7 +4,7 @@ import type { Socket } from "node:net";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { sessionLimits } from "../src/session/state.ts";
-import { sendBatches } from "../src/session/tcp.ts";
+import { sendBatches } from "../src/transport/tcp.ts";
 import { encodeCodec8 } from "../src/wire/codec8.ts";
 import { reader, withPeer } from "./peer.ts";
 

@@ -15,8 +15,9 @@ test("permits the CLI, session and wire dependency direction", () => {
   assert.deepEqual(
     checkArchitecture(
       files({
-        "cli.ts": 'void import("./session/tcp.ts");',
-        "session/tcp.ts":
+        "cli.ts":
+          'export async function runTcp() { await import("./transport/tcp.ts"); }',
+        "transport/tcp.ts":
           'import { createConnection } from "node:net"; export { codec } from "../wire/codec8.ts";',
         "session/state.ts":
           'export type State = typeof import("../wire/codec8.ts").codec;',
@@ -121,4 +122,42 @@ test("source tree errors and checker failures have distinct recovery instruction
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("only the CLI network command can import transport at runtime", () => {
+  const snapshot = files({
+    "cli.ts": [
+      'import "./transport/tcp.ts";',
+      'export { value } from "./transport/tcp.ts";',
+      'export type Tcp = typeof import("./transport/tcp.ts");',
+      'if (enabled) void import("./transport/tcp.ts");',
+      'export async function runTcp() { await import("./transport/tcp.ts"); }',
+    ].join("\n"),
+    "session/state.ts": 'export * from "../transport/tcp.ts";',
+    "transport/tcp.ts": "export const value = 1;",
+  });
+  assert.deepEqual(codes(checkArchitecture(snapshot)), [
+    "src/cli.ts:1 transport-load",
+    "src/cli.ts:2 transport-load",
+    "src/cli.ts:4 transport-load",
+    "src/session/state.ts:1 layer-import",
+  ]);
+});
+
+test("wire flags ambient capabilities while allowing local shadowing", () => {
+  const snapshot = files({
+    "wire/codec8.ts": [
+      "export const time = Date.now();",
+      "export const random = Math['random']();",
+      "export const socket = globalThis.WebSocket;",
+      "export const fetcher = fetch;",
+      "export const round = Math.round(1.2);",
+      "export function local(Date, Math, fetch) { return Date.now() + Math.random() + fetch(); }",
+      "export const metadata = { Date: 0 };",
+    ].join("\n"),
+  });
+  assert.deepEqual(
+    codes(checkArchitecture(snapshot)),
+    [1, 2, 3, 4].map((line) => `src/wire/codec8.ts:${line} wire-ambient`),
+  );
 });

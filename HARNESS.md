@@ -18,7 +18,8 @@ src/
   AGENTS.md                CLI and composition
   cli.ts                   commands, input files, receipts
   wire/AGENTS.md            wire invariants
-  session/AGENTS.md         delivery invariants
+  session/AGENTS.md         session settings and deadline invariants
+  transport/AGENTS.md       socket and delivery invariants
 tests/
   AGENTS.md                fixtures and test rules
   architecture.test.mjs     guard controls
@@ -32,15 +33,17 @@ tools/
 
 | Owner | State or effects owned | Allowed production dependencies |
 | --- | --- | --- |
-| CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, Ajv, Node fs/path/url |
+| CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, Ajv, Node fs/path/url. Runtime transport loads are confined to the network command |
 | Session state | Validated settings, monotonic run budget, error categories | Session and wire modules, without external imports |
 | TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, Node net, Effect |
 | Wire | Validated record and deterministic bytes | Wire and Ajv |
 
 The TypeScript AST gate checks imports, re-exports, import types, literal dynamic
 imports, unsupported CommonJS imports and cycles. New ownership requires a
-policy change with tests. The gate checks dependency structure and does not
-sandbox executed code. The loopback tests protect transport semantics.
+policy change with tests. The gate distinguishes type-only edges from runtime
+loads and checks selected ambient wire APIs. A Node load canary verifies that
+offline commands never load transport in source or built execution. These
+checks complement the loopback tests that protect transport semantics.
 
 | Point | Run | Failure action |
 | --- | --- | --- |
