@@ -44,3 +44,35 @@ each group. It derives wire counts, length and CRC. See the
 `pnpm check` enforces Biome, strict types, build, tests, wire coverage (90%
 lines and 85% branches), CLI line coverage (80%), a redacted secret scan and
 current dependency advisories (high and critical findings fail the gate).
+
+## Send one record over TCP
+
+Run `node dist/cli.js run --config ./private-run.json` against an authorized
+local listener. The version 1 run config contains these fields:
+
+| Field | Value |
+| --- | --- |
+| `schemaVersion` | `1` |
+| `record` | The complete version 1 record shown above |
+| `deviceId` | A logical name, such as `sim-a` |
+| `identityFile` | A filename beside the config, containing a JSON object mapping that one logical name to its 15-digit device identity |
+| `target` | Optional `{"transport":"tcp","host":"127.0.0.1","port":55027}` (default). Only literal `127.0.0.1` and `::1` are accepted |
+| `retry` | Optional overrides for `ackDeadlineMs` (30,000), `maxAttempts` (5), and `totalDeadlineMs` (600,000) |
+| `connectionPolicy` | Optional `single-batch` (default) or `persistent-compliant-peer` |
+
+Keep both files in an owned private directory. The identity file must be owned
+by the current user, have no group or other permissions, and be a regular
+file. Use `chmod 600` on Linux. Each input is capped at 16 KiB.
+
+The client sends a length-prefixed login and waits for acceptance before
+sending the frame. One exact four-byte count completes the batch. A refusal
+ends the run. After an uncertain reply the client closes the socket before
+retrying the same bytes. By default it closes the socket after success as well.
+Persistent mode is for peers that emit exactly one ACK per batch. Count-only
+ACKs cannot distinguish an unsolicited duplicate of an earlier equal-count
+batch on a reused connection. This command sends one batch per run.
+
+Exit 0 prints a receipt for the wire ACK. Exit 2 is invalid input, 3 is a
+session failure, and 130 is cancellation. A retry can result in duplicate
+acceptance if the peer received a frame and its ACK was lost. Projection and
+browser verification are separate.
