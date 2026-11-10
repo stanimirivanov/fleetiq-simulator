@@ -10,7 +10,6 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { type ConnectionPolicy, SessionError } from "./session/state.ts";
-import { sendBatches } from "./session/tcp.ts";
 import { encodeCodec8 } from "./wire/codec8.ts";
 
 const maxInput = 16 * 1024;
@@ -196,6 +195,7 @@ export async function runTcp(
       return 2;
     }
 
+    const { sendBatches } = await import("./session/tcp.ts");
     await sendBatches([frame], {
       ...(config.target ?? { host: "127.0.0.1", port: 55027 }),
       ...config.retry,

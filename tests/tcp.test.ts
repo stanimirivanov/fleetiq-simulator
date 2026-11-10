@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { sessionLimits } from "../src/session/state.ts";
 import { sendBatches } from "../src/session/tcp.ts";
+import { encodeCodec8 } from "../src/wire/codec8.ts";
 import { reader, withPeer } from "./peer.ts";
 
 // Published Teltonika TCP Codec 8 example, one record.
@@ -292,4 +293,44 @@ test("validates session bounds before connecting and measures one absolute run b
   assert.equal(budget.remaining(), 100);
   now += 100;
   assert.throws(budget.remaining, /^Error: run-timeout$/);
+});
+
+test("persistent reconnect retries only the unacknowledged batch", {
+  timeout: 3000,
+}, async () => {
+  const next = encodeCodec8({
+    schemaVersion: 1,
+    timestampMs: "0",
+    priority: 0,
+    longitudeE7: 0,
+    latitudeE7: 0,
+    altitude: 0,
+    angle: 0,
+    satellites: 0,
+    speed: 0,
+    eventId: 0,
+    io: [],
+  });
+  let attempts = 0;
+  await withPeer(
+    async (socket, attempt) => {
+      attempts = attempt;
+      const read = await login(socket);
+      socket.write(Buffer.from([1]));
+      if (attempt === 1) {
+        assert.deepEqual(await read(frame.length), frame);
+        socket.write(ack);
+      }
+      assert.deepEqual(await read(next.length), next);
+      if (attempt === 2) socket.end(ack);
+    },
+    async (port) => {
+      await sendBatches([frame, next], {
+        ...options(port),
+        maxAttempts: 2,
+        connectionPolicy: "persistent-compliant-peer",
+      });
+      assert.equal(attempts, 2);
+    },
+  );
 });

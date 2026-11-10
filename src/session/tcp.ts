@@ -1,5 +1,5 @@
 import { createConnection, type Socket } from "node:net";
-import { setTimeout as delay } from "node:timers/promises";
+import { Cause, Effect, Exit } from "effect";
 import { crc16Arc } from "../wire/codec8.ts";
 import {
   SessionError,
@@ -8,84 +8,121 @@ import {
   sessionLimits,
 } from "./state.ts";
 
+function readReply(
+  socket: Socket,
+  bytes: Buffer,
+  size: 1 | 4,
+  expired: () => boolean,
+  timeout: SessionError,
+) {
+  return Effect.callback<Buffer, SessionError>((resume) => {
+    if (socket.destroyed || socket.readableEnded) {
+      resume(Effect.fail(new SessionError("connection-closed")));
+      return;
+    }
+    // Buffered bytes predate this request, so they cannot acknowledge it.
+    if (socket.readableLength !== 0) {
+      resume(Effect.fail(new SessionError("unexpected-reply")));
+      return;
+    }
+
+    const reply = Buffer.alloc(size);
+    let received = 0;
+    const cleanup = () => {
+      socket.off("readable", readable);
+      socket.off("close", closed);
+      socket.off("end", closed);
+    };
+    const finish = (result: Effect.Effect<Buffer, SessionError>) => {
+      cleanup();
+      resume(result);
+    };
+    const closed = () =>
+      finish(Effect.fail(new SessionError("connection-closed")));
+    const readable = () => {
+      if (expired()) {
+        finish(Effect.fail(timeout));
+        return;
+      }
+      const available = socket.readableLength;
+      if (available > size - received) {
+        finish(Effect.fail(new SessionError("unexpected-reply")));
+      } else if (available > 0) {
+        const chunk: Buffer = socket.read(available);
+        received += chunk.copy(reply, received);
+        if (received === size) finish(Effect.succeed(reply));
+      }
+    };
+
+    socket.on("close", closed);
+    socket.on("end", closed);
+    socket.on("readable", readable);
+    socket.write(bytes);
+    return Effect.sync(cleanup);
+  });
+}
+
+function remainingBudget(limits: SessionLimits, at?: number) {
+  return Effect.try({
+    try: () => limits.remaining(at),
+    catch: (error) => {
+      if (error instanceof SessionError) return error;
+      throw error;
+    },
+  });
+}
+
 function exchange(
   socket: Socket,
   bytes: Buffer,
   size: 1 | 4,
   limits: SessionLimits,
-): Promise<Buffer> {
-  const started = limits.now();
-  const remaining = limits.remaining(started);
-  const wait = Math.min(limits.ackDeadlineMs, remaining);
-  const deadline = started + wait;
-  const timeout =
-    remaining <= limits.ackDeadlineMs
-      ? "run-timeout"
-      : size === 1
-        ? "login-timeout"
-        : "ack-timeout";
-
-  return new Promise((resolve, reject) => {
-    const finish = (result: Buffer | SessionError) => {
-      clearTimeout(timer);
-      socket.off("readable", readable);
-      socket.off("close", closed);
-      socket.off("end", closed);
-      limits.signal?.removeEventListener("abort", cancelled);
-      if (result instanceof SessionError) reject(result);
-      else resolve(result);
-    };
-    const expired = () => finish(new SessionError(timeout));
-    const reply = Buffer.alloc(size);
-    let received = 0;
-    const readable = () => {
-      if (limits.now() >= deadline) {
-        expired();
-        return;
-      }
-      const available = socket.readableLength;
-      if (available > size - received) {
-        finish(new SessionError("unexpected-reply"));
-      } else if (available > 0) {
-        const chunk: Buffer = socket.read(available);
-        received += chunk.copy(reply, received);
-        if (received === size) finish(reply);
-      }
-    };
-    const closed = () => finish(new SessionError("connection-closed"));
-    const cancelled = () => finish(new SessionError("cancelled"));
-    const timer = setTimeout(expired, Math.ceil(wait));
-
-    if (socket.destroyed || socket.readableEnded) {
-      closed();
-      return;
-    }
-    // Buffered bytes predate this request, so they cannot acknowledge it.
-    if (socket.readableLength !== 0) {
-      finish(new SessionError("unexpected-reply"));
-      return;
-    }
-    limits.signal?.addEventListener("abort", cancelled, { once: true });
-    socket.on("close", closed);
-    socket.on("end", closed);
-    socket.on("readable", readable);
-    socket.write(bytes);
+) {
+  return Effect.gen(function* () {
+    const started = limits.now();
+    const remaining = yield* remainingBudget(limits, started);
+    const wait = Math.min(limits.ackDeadlineMs, remaining);
+    const deadline = started + wait;
+    const timeout = new SessionError(
+      remaining <= limits.ackDeadlineMs
+        ? "run-timeout"
+        : size === 1
+          ? "login-timeout"
+          : "ack-timeout",
+    );
+    return yield* readReply(
+      socket,
+      bytes,
+      size,
+      () => limits.now() >= deadline,
+      timeout,
+    ).pipe(
+      Effect.timeoutOrElse({
+        duration: Math.ceil(wait),
+        orElse: () => Effect.fail(timeout),
+      }),
+    );
   });
 }
 
-function connect({ host, port }: SessionOptions) {
-  const address = { host, port, highWaterMark: 64, noDelay: true };
-  const socket = createConnection(address);
-  // Transport errors are reported by the close event without exposing endpoints.
-  socket.on("error", () => {});
-  const closed = new Promise<void>((resolve) => socket.once("close", resolve));
-  return {
-    socket,
-    async retire() {
-      socket.destroy();
-      await closed;
-    },
-  };
+function openSocket({ host, port }: SessionOptions) {
+  return Effect.acquireRelease(
+    Effect.sync(() => {
+      const address = { host, port, highWaterMark: 64, noDelay: true };
+      const socket = createConnection(address);
+      // The close event reports transport failure without exposing endpoints.
+      socket.on("error", () => {});
+      const closed = new Promise<void>((resolve) =>
+        socket.once("close", resolve),
+      );
+      return { socket, closed };
+    }),
+    ({ socket, closed }) =>
+      Effect.promise(() => {
+        socket.destroy();
+        return closed;
+      }),
+  );
 }
 
 function freezeFrame(frame: Buffer): Buffer {
@@ -115,48 +152,51 @@ export async function sendBatches(
   login.writeUInt16BE(15);
   login.write(options.identity, 2, "ascii");
 
-  let connection: ReturnType<typeof connect> | undefined;
-  try {
-    for (const frame of frozen) {
-      for (let attempt = 1; ; attempt++) {
-        limits.remaining();
-        try {
-          if (!connection) {
-            connection = connect(options);
-            const reply = await exchange(connection.socket, login, 1, limits);
-            if (reply[0] !== 1) throw new SessionError("login-refused");
-          }
-          const reply = await exchange(connection.socket, frame, 4, limits);
-          if (reply.readUInt32BE() !== frame[9])
-            throw new SessionError("ack-count");
-          if (limits.connectionPolicy === "single-batch") {
-            await connection.retire();
-            connection = undefined;
-          }
-          break;
-        } catch (error) {
-          await connection?.retire();
-          connection = undefined;
-          if (
-            !(error instanceof SessionError) ||
-            error.category === "login-refused" ||
-            error.category === "run-timeout" ||
-            error.category === "cancelled" ||
-            attempt === limits.maxAttempts
-          )
-            throw error;
-          const remaining = limits.remaining();
-          try {
-            await delay(Math.min(100, remaining), undefined, {
-              signal: limits.signal,
-            });
-          } catch {
-            throw new SessionError("cancelled");
-          }
-        }
+  const program = Effect.gen(function* () {
+    let next = 0;
+    let failures = 0;
+    const connection = Effect.gen(function* () {
+      yield* remainingBudget(limits);
+      const { socket } = yield* openSocket(options);
+      const accepted = yield* exchange(socket, login, 1, limits);
+      if (accepted[0] !== 1)
+        return yield* Effect.fail(new SessionError("login-refused"));
+
+      for (const frame of frozen.slice(next)) {
+        const reply = yield* exchange(socket, frame, 4, limits);
+        if (reply.readUInt32BE() !== frame[9])
+          return yield* Effect.fail(new SessionError("ack-count"));
+        next++;
+        failures = 0;
+        if (limits.connectionPolicy === "single-batch") break;
       }
-    }
-  } finally {
-    await connection?.retire();
+    }).pipe(Effect.scoped);
+
+    // Scope closes before the retry predicate runs. The cursor advances only on ACK.
+    const send = connection.pipe(
+      Effect.retry({
+        while: (error) =>
+          Effect.gen(function* () {
+            if (
+              error.category === "login-refused" ||
+              error.category === "run-timeout" ||
+              error.category === "cancelled" ||
+              ++failures >= limits.maxAttempts
+            )
+              return false;
+            const remaining = yield* remainingBudget(limits);
+            yield* Effect.sleep(Math.min(100, remaining));
+            return true;
+          }),
+      }),
+    );
+    while (next < frozen.length) yield* send;
+  });
+
+  const exit = await Effect.runPromiseExit(program, { signal: options.signal });
+  if (Exit.isFailure(exit)) {
+    if (Cause.hasInterruptsOnly(exit.cause))
+      throw new SessionError("cancelled");
+    throw Cause.squash(exit.cause);
   }
 }
