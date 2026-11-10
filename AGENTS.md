@@ -14,8 +14,8 @@ input schemas and Effect 4 for TCP resource lifetime.
 | Gates, hooks or CI | [Tooling guide](tools/AGENTS.md) and [Harness](HARNESS.md) |
 
 Read [CONSTRAINTS.md](CONSTRAINTS.md) before changing a quality gate or contract.
-Reuse the existing layer boundaries. Prefer named exports, explicit units and
-fixed error categories. Use comments to explain wire quirks, ownership or ordering
+Reuse the existing layer boundaries. Use named exports, explicit units and fixed
+error categories. Use comments to explain wire quirks, ownership or ordering
 that a reader cannot infer from the code. Cite an independent source for literal
 wire fixtures. Keep identities, captures and private settings out of the checkout
 and evidence.

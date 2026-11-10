@@ -11,6 +11,8 @@ contains an offline encoder and a one-record loopback sender.
 ```text
 AGENTS.md                  issue intake, PEV, and context routing
 CONSTRAINTS.md             quality floor and gate authority
+tsconfig.json               production build and shared strict options
+tsconfig.typecheck.json     no-emit project for source, tests and tooling
 HARNESS.md                 ownership and rollout
 src/
   AGENTS.md                CLI and composition
@@ -46,6 +48,10 @@ sandbox executed code. The loopback tests protect transport semantics.
 | Stage | `pnpm check:fast` | Fix Biome, strict types or import diagnostics |
 | Pre-PR | `pnpm install --frozen-lockfile`, `pnpm check`, then `pnpm security` on the final lockfile | Fix the cause or report a missing tool, unavailable advisory service or other incomplete gate |
 | PR CI | Existing `Simulator verification / check` job runs `pnpm check` | Attach concise, sanitized failure evidence to the task and return to the relevant narrow check |
+
+The type gate checks source, TypeScript test helpers, and JavaScript test and
+tool modules. The build emits only production code. Biome enforces named exports
+and TypeScript rejects syntax that requires runtime transformation.
 
 The canonical gate executes lint, type checking, architecture and canaries, build,
 coverage tests, secret scanning and the dependency audit. The live advisory

@@ -9,12 +9,24 @@ const layers = {
   wire: ["wire"],
 };
 
+/**
+ * Maps a source path to its policy layer, leaving unrecognized paths unowned.
+ *
+ * @param {string} file
+ */
 function owner(file) {
   if (file === "cli.ts") return "cli";
   const first = file.split("/")[0];
   if (first === "wire" || first === "session") return first;
 }
 
+/**
+ * Allows platform imports only in the layer that owns the corresponding effect.
+ *
+ * @param {string} file
+ * @param {keyof typeof layers} layer
+ * @param {string} name
+ */
 function allowedExternal(file, layer, name) {
   if (file === "session/tcp.ts")
     return name === "node:net" || name === "effect";
@@ -25,10 +37,21 @@ function allowedExternal(file, layer, name) {
   );
 }
 
+/**
+ * Checks imports and re-exports in a source snapshot and returns stable diagnostics.
+ * The snapshot uses paths relative to src so tests can exercise the same policy
+ * without opening files.
+ *
+ * @param {ReadonlyMap<string, string>} files
+ */
 export function checkArchitecture(files) {
   const problems = [];
+
+  /** @type {Map<string, { target: string, report: () => void }[]>} */
   const graph = new Map();
   for (const file of [...files.keys()].sort()) {
+    const text = files.get(file);
+    if (text === undefined) throw new Error("missing-source-text");
     const layer = owner(file);
     if (!layer) {
       problems.push(`${file}:1 unknown-owner`);
@@ -37,18 +60,34 @@ export function checkArchitecture(files) {
 
     const source = ts.createSourceFile(
       file,
-      files.get(file),
+      text,
       ts.ScriptTarget.Latest,
       true,
     );
+
+    /** @type {{ target: string, report: () => void }[]} */
     const edges = [];
     graph.set(file, edges);
+
+    /**
+     * Uses the node's start position so diagnostics point to the import itself.
+     *
+     * @param {ts.Node} node
+     * @param {string} rule
+     */
     const report = (node, rule) => {
       const { line } = source.getLineAndCharacterOfPosition(
         node.getStart(source),
       );
       problems.push(`${file}:${line + 1} ${rule}`);
     };
+
+    /**
+     * Checks a module reference and records only allowed local edges for cycle detection.
+     *
+     * @param {ts.Node} node
+     * @param {ts.Node | undefined} specifier
+     */
     const checkImport = (node, specifier) => {
       if (!specifier || !ts.isStringLiteralLike(specifier)) {
         report(node, "computed-import");
@@ -64,12 +103,18 @@ export function checkArchitecture(files) {
       const target = posix.normalize(posix.join(posix.dirname(file), name));
       if (!files.has(target)) {
         report(node, "unresolved-import");
-      } else if (!layers[layer].includes(owner(target))) {
+      } else if (!layers[layer].some((allowed) => allowed === owner(target))) {
         report(node, "layer-import");
       } else {
         edges.push({ target, report: () => report(node, "import-cycle") });
       }
     };
+
+    /**
+     * Visits static, dynamic, and type-only references under the same import policy.
+     *
+     * @param {ts.Node} node
+     */
     const visit = (node) => {
       if (
         ts.isImportDeclaration(node) ||
@@ -79,7 +124,9 @@ export function checkArchitecture(files) {
       } else if (ts.isImportTypeNode(node)) {
         checkImport(
           node,
-          ts.isLiteralTypeNode(node.argument) && node.argument.literal,
+          ts.isLiteralTypeNode(node.argument)
+            ? node.argument.literal
+            : undefined,
         );
       } else if (ts.isImportEqualsDeclaration(node)) {
         report(node, "unsupported-import");
@@ -100,10 +147,16 @@ export function checkArchitecture(files) {
 
   const active = new Set();
   const visited = new Set();
+
+  /**
+   * Detects cycles along the active traversal path, allowing shared dependencies.
+   *
+   * @param {string} file
+   */
   function visitEdges(file) {
     if (visited.has(file)) return;
     active.add(file);
-    for (const edge of graph.get(file)) {
+    for (const edge of graph.get(file) ?? []) {
       if (active.has(edge.target)) edge.report();
       else visitEdges(edge.target);
     }
@@ -114,6 +167,14 @@ export function checkArchitecture(files) {
   return problems;
 }
 
+/**
+ * Collects TypeScript source by path relative to src, rejecting unexpected entries
+ * such as symlinks rather than silently leaving them out of the gate.
+ *
+ * @param {string} root
+ * @param {string} [prefix]
+ * @param {Map<string, string>} [files]
+ */
 function readSources(root, prefix = "", files = new Map()) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const file = prefix + entry.name;

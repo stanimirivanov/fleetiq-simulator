@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkArchitecture } from "../tools/architecture.mjs";
 
+/** @param {Record<string, string>} extra */
 const files = (extra) =>
   new Map(
     Object.entries({ "wire/codec8.ts": "export const codec = 8;", ...extra }),
