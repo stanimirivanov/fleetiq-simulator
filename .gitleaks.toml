@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "device-identity"
+description = "Potential device identity"
+regex = '''\b[0-9]{15}\b'''
+
+[[allowlists]]
+paths = ['''(^|/)(node_modules|dist)(/|$)''']
