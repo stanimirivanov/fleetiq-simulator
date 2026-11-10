@@ -1,13 +1,46 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { isBuiltin } from "node:module";
 import { join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
+import { reviewedPath } from "./diagnostic-location.mjs";
 
 const layers = {
   cli: ["session", "wire"],
   session: ["session", "wire"],
   wire: ["wire"],
 };
+
+const remedies = {
+  "unknown-owner":
+    "Move the file under an existing owner or review a policy update.",
+  "computed-import": "Use a literal module specifier.",
+  "unsupported-import": "Use an ESM import.",
+  "external-import":
+    "Move the dependency to its owning layer or use an allowed module.",
+  "unresolved-import": "Check the relative path and explicit .ts extension.",
+  "layer-import":
+    "Move the dependency to an allowed layer or pass it across the boundary.",
+  "import-cycle":
+    "Break the cycle by moving shared code to a dependency both modules can use.",
+};
+
+/**
+ * Shows only reviewed module names and paths in diagnostics. An arbitrary
+ * specifier can carry private text even if it parses as a module name.
+ *
+ * @param {string} file
+ * @param {string} name
+ */
+function moduleContext(file, name) {
+  if (isBuiltin(name) || name === "effect" || name === "ajv/dist/2020.js")
+    return name;
+  if (name.startsWith("./") || name.startsWith("../")) {
+    const target = posix.normalize(posix.join(posix.dirname(file), name));
+    return reviewedPath(`src/${target}`) ?? "[module withheld]";
+  }
+  return "[module withheld]";
+}
 
 /**
  * Maps a source path to its policy layer, leaving unrecognized paths unowned.
@@ -52,9 +85,12 @@ export function checkArchitecture(files) {
   for (const file of [...files.keys()].sort()) {
     const text = files.get(file);
     if (text === undefined) throw new Error("missing-source-text");
+    const location = reviewedPath(`src/${file}`) ?? "[location withheld]";
     const layer = owner(file);
     if (!layer) {
-      problems.push(`${file}:1 unknown-owner`);
+      problems.push(
+        `${location}:1 unknown-owner; ${remedies["unknown-owner"]}`,
+      );
       continue;
     }
 
@@ -73,13 +109,20 @@ export function checkArchitecture(files) {
      * Uses the node's start position so diagnostics point to the import itself.
      *
      * @param {ts.Node} node
-     * @param {string} rule
+     * @param {keyof typeof remedies} rule
+     * @param {string} [moduleName]
      */
-    const report = (node, rule) => {
+    const report = (node, rule, moduleName) => {
       const { line } = source.getLineAndCharacterOfPosition(
         node.getStart(source),
       );
-      problems.push(`${file}:${line + 1} ${rule}`);
+      const context =
+        moduleName === undefined
+          ? ""
+          : ` module=${moduleContext(file, moduleName)};`;
+      problems.push(
+        `${location}:${line + 1} ${rule};${context} ${remedies[rule]}`,
+      );
     };
 
     /**
@@ -96,17 +139,20 @@ export function checkArchitecture(files) {
       const name = specifier.text;
       if (!name.startsWith("./") && !name.startsWith("../")) {
         if (!allowedExternal(file, layer, name))
-          report(node, "external-import");
+          report(node, "external-import", name);
         return;
       }
 
       const target = posix.normalize(posix.join(posix.dirname(file), name));
       if (!files.has(target)) {
-        report(node, "unresolved-import");
+        report(node, "unresolved-import", name);
       } else if (!layers[layer].some((allowed) => allowed === owner(target))) {
-        report(node, "layer-import");
+        report(node, "layer-import", name);
       } else {
-        edges.push({ target, report: () => report(node, "import-cycle") });
+        edges.push({
+          target,
+          report: () => report(node, "import-cycle", name),
+        });
       }
     };
 
@@ -184,35 +230,61 @@ function readSources(root, prefix = "", files = new Map()) {
     } else if (entry.isFile() && file.endsWith(".ts")) {
       files.set(file, readFileSync(path, "utf8"));
     } else if (!entry.isFile() || !file.endsWith(".md")) {
-      throw new Error("unsupported-source-entry");
+      throw new InvalidSourceEntry();
     }
   }
   return files;
+}
+
+class InvalidSourceEntry extends Error {}
+
+/**
+ * Separates checkout and input failures from checker defects without emitting
+ * raw exceptions. An empty result means the source passed.
+ *
+ * @param {string} root
+ * @param {typeof checkArchitecture} [analyze]
+ */
+export function checkSourceTree(root, analyze = checkArchitecture) {
+  let files;
+  try {
+    files = readSources(root);
+  } catch (error) {
+    if (error instanceof InvalidSourceEntry) {
+      return [
+        "invalid-source-entry; Remove unsupported files or symlinks from src/.",
+      ];
+    }
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return ["missing-source; Restore the src/ checkout and rerun the gate."];
+    }
+    return ["source-unreadable; Check src/ paths and read permissions."];
+  }
+  if (!files.has("cli.ts") || files.size < 2) {
+    return [
+      "missing-source; Restore cli.ts and the source modules under src/.",
+    ];
+  }
+  try {
+    return analyze(files);
+  } catch {
+    return [
+      "checker-error; Reproduce with an architecture fixture before changing policy.",
+    ];
+  }
 }
 
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  try {
-    const files = readSources(
-      fileURLToPath(new URL("../src/", import.meta.url)),
-    );
-    if (!files.has("cli.ts") || files.size < 2)
-      throw new Error("missing-source");
-    const problems = checkArchitecture(files);
-    if (problems.length) {
-      process.stderr.write(
-        `${problems.map((problem) => `src/${problem}`).join("\n")}\n`,
-      );
-      process.exitCode = 1;
-    } else {
-      process.stdout.write("Architecture boundaries passed.\n");
-    }
-  } catch {
-    process.stderr.write(
-      "Architecture check could not read the source tree.\n",
-    );
+  const problems = checkSourceTree(
+    fileURLToPath(new URL("../src/", import.meta.url)),
+  );
+  if (problems.length) {
+    process.stderr.write(`${problems.join("\n")}\n`);
     process.exitCode = 1;
+  } else {
+    process.stdout.write("Architecture boundaries passed.\n");
   }
 }
