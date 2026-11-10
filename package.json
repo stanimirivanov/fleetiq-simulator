@@ -8,13 +8,16 @@
     "node": "24.18.0"
   },
   "scripts": {
-    "check": "biome ci . && pnpm typecheck && pnpm build && pnpm test:coverage && pnpm security",
+    "check": "pnpm check:fast && pnpm build && pnpm test:coverage && pnpm security",
     "typecheck": "tsc --noEmit",
     "build": "tsc --rootDir src --outDir dist --rewriteRelativeImportExtensions",
     "test": "node --test tests/*.test.ts tests/*.test.mjs",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/wire/*.ts' --test-coverage-lines=90 --test-coverage-branches=85 tests/codec8.test.ts && node --test --experimental-test-coverage --test-coverage-include='src/session/*.ts' --test-coverage-lines=90 --test-coverage-branches=85 tests/tcp.test.ts && node --test --experimental-test-coverage --test-coverage-include='src/cli.ts' --test-coverage-lines=80 tests/codec8.test.ts tests/tcp.test.ts && node --test tests/quality.test.mjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/wire/*.ts' --test-coverage-lines=90 --test-coverage-branches=85 tests/codec8.test.ts && node --test --experimental-test-coverage --test-coverage-include='src/session/*.ts' --test-coverage-lines=90 --test-coverage-branches=85 tests/tcp.test.ts && node --test --experimental-test-coverage --test-coverage-include='src/cli.ts' --test-coverage-lines=80 tests/*.test.ts && node --test tests/*.test.mjs",
     "security": "pnpm secrets && pnpm audit --audit-level high",
-    "secrets": "node tools/secrets.mjs"
+    "secrets": "node tools/secrets.mjs",
+    "check:fast": "pnpm lint && pnpm typecheck && pnpm architecture",
+    "lint": "biome ci . --error-on-warnings",
+    "architecture": "node tools/architecture.mjs"
   },
   "dependencies": {
     "ajv": "8.20.0",

@@ -1,5 +1,8 @@
 # FleetIQ simulator
 
+For repository boundaries, agent instructions and verification commands, see
+[AGENTS.md](AGENTS.md) and the [coding harness](HARNESS.md).
+
 SIM-PR1 validates one versioned record offline and writes a Teltonika Codec 8
 TCP AVL frame. It accepts no device identity. TCP sessions are a later slice.
 
