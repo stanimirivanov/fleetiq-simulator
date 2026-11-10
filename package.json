@@ -16,7 +16,8 @@
     "security": "pnpm secrets && pnpm audit --audit-level high",
     "secrets": "node tools/secrets.mjs",
     "check:fast": "pnpm lint && pnpm typecheck && pnpm architecture",
-    "lint": "biome ci . --error-on-warnings",
+    "lint": "biome ci . --error-on-warnings && pnpm lint:comments",
+    "lint:comments": "eslint tools",
     "architecture": "node tools/architecture.mjs"
   },
   "dependencies": {
@@ -25,7 +26,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "24.10.1",
+    "eslint": "10.14.0",
+    "eslint-plugin-jsdoc": "65.4.5",
     "typescript": "5.9.3"
   }
 }

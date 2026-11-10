@@ -3,7 +3,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const config = fileURLToPath(new URL("../.gitleaks.toml", import.meta.url));
 
-/** @param {readonly string[]} args */
+/**
+ * Classifies Gitleaks results without exposing scanner output that may contain
+ * private data. The configured finding exit code is distinct from tool failures.
+ *
+ * @param {readonly string[]} args
+ */
 export function scan(args, binary = "gitleaks") {
   const result = spawnSync(
     binary,

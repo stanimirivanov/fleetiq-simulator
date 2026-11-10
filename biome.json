@@ -1,7 +1,31 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "files": { "includes": ["**", "!dist", "!pnpm-lock.yaml"] },
-  "formatter": { "indentStyle": "space" },
-  "linter": { "rules": { "style": { "noDefaultExport": "error" } } },
-  "javascript": { "globals": ["Buffer", "process"] }
+  "files": {
+    "includes": ["**", "!dist", "!pnpm-lock.yaml"]
+  },
+  "formatter": {
+    "indentStyle": "space"
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "noDefaultExport": "error"
+      }
+    }
+  },
+  "javascript": {
+    "globals": ["Buffer", "process"]
+  },
+  "overrides": [
+    {
+      "includes": ["eslint.config.mjs"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    }
+  ]
 }
