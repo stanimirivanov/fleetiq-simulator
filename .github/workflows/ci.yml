@@ -27,4 +27,5 @@ jobs:
           mkdir "$RUNNER_TEMP/fleetiq-tools"
           tar -xzf "$archive" -C "$RUNNER_TEMP/fleetiq-tools" gitleaks
           echo "$RUNNER_TEMP/fleetiq-tools" >> "$GITHUB_PATH"
-      - run: pnpm check
+      - name: Run the canonical verification harness
+        run: pnpm check
