@@ -9,12 +9,18 @@ const layers = {
   wire: ["wire"],
 };
 
+/** @param {string} file */
 function owner(file) {
   if (file === "cli.ts") return "cli";
   const first = file.split("/")[0];
   if (first === "wire" || first === "session") return first;
 }
 
+/**
+ * @param {string} file
+ * @param {keyof typeof layers} layer
+ * @param {string} name
+ */
 function allowedExternal(file, layer, name) {
   if (file === "session/tcp.ts")
     return name === "node:net" || name === "effect";
@@ -25,10 +31,14 @@ function allowedExternal(file, layer, name) {
   );
 }
 
+/** @param {ReadonlyMap<string, string>} files */
 export function checkArchitecture(files) {
   const problems = [];
+  /** @type {Map<string, { target: string, report: () => void }[]>} */
   const graph = new Map();
   for (const file of [...files.keys()].sort()) {
+    const text = files.get(file);
+    if (text === undefined) throw new Error("missing-source-text");
     const layer = owner(file);
     if (!layer) {
       problems.push(`${file}:1 unknown-owner`);
@@ -37,18 +47,21 @@ export function checkArchitecture(files) {
 
     const source = ts.createSourceFile(
       file,
-      files.get(file),
+      text,
       ts.ScriptTarget.Latest,
       true,
     );
+    /** @type {{ target: string, report: () => void }[]} */
     const edges = [];
     graph.set(file, edges);
+    /** @param {ts.Node} node @param {string} rule */
     const report = (node, rule) => {
       const { line } = source.getLineAndCharacterOfPosition(
         node.getStart(source),
       );
       problems.push(`${file}:${line + 1} ${rule}`);
     };
+    /** @param {ts.Node} node @param {ts.Node | undefined} specifier */
     const checkImport = (node, specifier) => {
       if (!specifier || !ts.isStringLiteralLike(specifier)) {
         report(node, "computed-import");
@@ -64,12 +77,13 @@ export function checkArchitecture(files) {
       const target = posix.normalize(posix.join(posix.dirname(file), name));
       if (!files.has(target)) {
         report(node, "unresolved-import");
-      } else if (!layers[layer].includes(owner(target))) {
+      } else if (!layers[layer].some((allowed) => allowed === owner(target))) {
         report(node, "layer-import");
       } else {
         edges.push({ target, report: () => report(node, "import-cycle") });
       }
     };
+    /** @param {ts.Node} node */
     const visit = (node) => {
       if (
         ts.isImportDeclaration(node) ||
@@ -79,7 +93,9 @@ export function checkArchitecture(files) {
       } else if (ts.isImportTypeNode(node)) {
         checkImport(
           node,
-          ts.isLiteralTypeNode(node.argument) && node.argument.literal,
+          ts.isLiteralTypeNode(node.argument)
+            ? node.argument.literal
+            : undefined,
         );
       } else if (ts.isImportEqualsDeclaration(node)) {
         report(node, "unsupported-import");
@@ -100,10 +116,11 @@ export function checkArchitecture(files) {
 
   const active = new Set();
   const visited = new Set();
+  /** @param {string} file */
   function visitEdges(file) {
     if (visited.has(file)) return;
     active.add(file);
-    for (const edge of graph.get(file)) {
+    for (const edge of graph.get(file) ?? []) {
       if (active.has(edge.target)) edge.report();
       else visitEdges(edge.target);
     }
@@ -114,6 +131,11 @@ export function checkArchitecture(files) {
   return problems;
 }
 
+/**
+ * @param {string} root
+ * @param {string} [prefix]
+ * @param {Map<string, string>} [files]
+ */
 function readSources(root, prefix = "", files = new Map()) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const file = prefix + entry.name;

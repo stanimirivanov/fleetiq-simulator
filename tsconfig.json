@@ -5,6 +5,7 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     "rewriteRelativeImportExtensions": true,
     "types": ["node"]
   },

@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const config = fileURLToPath(new URL("../.gitleaks.toml", import.meta.url));
 
+/** @param {readonly string[]} args */
 export function scan(args, binary = "gitleaks") {
   const result = spawnSync(
     binary,
