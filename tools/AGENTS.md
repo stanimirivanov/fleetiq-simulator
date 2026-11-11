@@ -7,7 +7,10 @@ and print source locations for static failures. Preserve redaction on scans.
 
 When changing architecture policy, ship a matching positive and negative
 fixture. Document approved changes to quality checks in the PR. Keep CI
-read-only for repository contents and scoped to pull requests.
+read-only for repository contents. PR verification and the scheduled/manual
+security workflow are the approved triggers; do not add privileged PR execution.
+Preserve `Simulator verification / check`. Pin actions to verified upstream full
+commit SHAs and update the workflow controls when reviewing a pin upgrade.
 
 Put a blank line before a standalone comment or comment group so it reads
 with the code it introduces. In tooling JSDoc, lead with what the function

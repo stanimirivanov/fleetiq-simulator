@@ -40,6 +40,7 @@ export const groups = [
       "tests/quality.test.mjs",
       "tests/transport-load.test.mjs",
       "tests/typecheck.test.mjs",
+      "tests/workflows.test.mjs",
     ],
     sources: [],
     lines: 0,
