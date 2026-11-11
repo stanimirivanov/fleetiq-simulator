@@ -1,12 +1,12 @@
 import { createConnection, type Socket } from "node:net";
 import { Cause, Effect, Exit } from "effect";
-import { crc16Arc } from "../wire/codec8.ts";
 import {
   SessionError,
   type SessionLimits,
   type SessionOptions,
   sessionLimits,
-} from "./state.ts";
+} from "../session/state.ts";
+import { crc16Arc } from "../wire/codec8.ts";
 
 function readReply(
   socket: Socket,

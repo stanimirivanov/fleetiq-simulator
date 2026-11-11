@@ -9,7 +9,8 @@ input schemas and Effect 4 for TCP resource lifetime.
 | --- | --- |
 | `src/cli.ts` or CLI contracts | [Source guide](src/AGENTS.md) |
 | Encoding and record validation | [Wire guide](src/wire/AGENTS.md) |
-| Handshake, deadlines or retries | [Session guide](src/session/AGENTS.md) |
+| Session settings or budget | [Session guide](src/session/AGENTS.md) |
+| Handshake, ACK or retries | [Transport guide](src/transport/AGENTS.md) |
 | Tests or fixtures | [Test guide](tests/AGENTS.md) |
 | Gates, hooks or CI | [Tooling guide](tools/AGENTS.md) and [Harness](HARNESS.md) |
 

@@ -4,14 +4,20 @@ import { join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 import { reviewedPath } from "./diagnostic-location.mjs";
+import { wireAmbient } from "./wire-ambient.mjs";
 
 const layers = {
-  cli: ["session", "wire"],
+  cli: ["session", "wire", "transport"],
+  transport: ["transport", "session", "wire"],
   session: ["session", "wire"],
   wire: ["wire"],
 };
 
 const remedies = {
+  "transport-load":
+    "Load transport with a dynamic import inside the CLI runTcp command.",
+  "wire-ambient":
+    "Pass deterministic values into the wire encoder instead of reading ambient state.",
   "unknown-owner":
     "Move the file under an existing owner or review a policy update.",
   "computed-import": "Use a literal module specifier.",
@@ -50,24 +56,51 @@ function moduleContext(file, name) {
 function owner(file) {
   if (file === "cli.ts") return "cli";
   const first = file.split("/")[0];
-  if (first === "wire" || first === "session") return first;
+  if (first === "wire" || first === "session" || first === "transport")
+    return first;
 }
 
 /**
  * Allows platform imports only in the layer that owns the corresponding effect.
  *
- * @param {string} file
  * @param {keyof typeof layers} layer
  * @param {string} name
  */
-function allowedExternal(file, layer, name) {
-  if (file === "session/tcp.ts")
-    return name === "node:net" || name === "effect";
+function allowedExternal(layer, name) {
+  if (layer === "transport") return name === "node:net" || name === "effect";
   if (layer === "wire") return name === "ajv/dist/2020.js";
   return (
     layer === "cli" &&
     ["node:fs", "node:path", "node:url", "ajv/dist/2020.js"].includes(name)
   );
+}
+
+/**
+ * A literal dynamic import in the top-level network command is the CLI's
+ * only runtime entry to transport. Imports inside nested functions are
+ * outside that boundary.
+ *
+ * @param {ts.Node} node
+ */
+function insideNetworkCommand(node) {
+  if (
+    !ts.isCallExpression(node) ||
+    node.expression.kind !== ts.SyntaxKind.ImportKeyword
+  )
+    return false;
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (ts.isFunctionLike(parent)) {
+      return (
+        ts.isFunctionDeclaration(parent) &&
+        ts.isSourceFile(parent.parent) &&
+        parent.name?.text === "runTcp" &&
+        parent.modifiers?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+        ) === true
+      );
+    }
+  }
+  return false;
 }
 
 /**
@@ -79,6 +112,7 @@ function allowedExternal(file, layer, name) {
  */
 export function checkArchitecture(files) {
   const problems = [];
+  const ambient = wireAmbient(files);
 
   /** @type {Map<string, { target: string, report: () => void }[]>} */
   const graph = new Map();
@@ -94,12 +128,9 @@ export function checkArchitecture(files) {
       continue;
     }
 
-    const source = ts.createSourceFile(
-      file,
-      text,
-      ts.ScriptTarget.Latest,
-      true,
-    );
+    const source =
+      ambient.source(file) ??
+      ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 
     /** @type {{ target: string, report: () => void }[]} */
     const edges = [];
@@ -130,15 +161,16 @@ export function checkArchitecture(files) {
      *
      * @param {ts.Node} node
      * @param {ts.Node | undefined} specifier
+     * @param {boolean} [typeOnly]
      */
-    const checkImport = (node, specifier) => {
+    const checkImport = (node, specifier, typeOnly = false) => {
       if (!specifier || !ts.isStringLiteralLike(specifier)) {
         report(node, "computed-import");
         return;
       }
       const name = specifier.text;
       if (!name.startsWith("./") && !name.startsWith("../")) {
-        if (!allowedExternal(file, layer, name))
+        if (!allowedExternal(layer, name))
           report(node, "external-import", name);
         return;
       }
@@ -148,6 +180,13 @@ export function checkArchitecture(files) {
         report(node, "unresolved-import", name);
       } else if (!layers[layer].some((allowed) => allowed === owner(target))) {
         report(node, "layer-import", name);
+      } else if (
+        layer === "cli" &&
+        owner(target) === "transport" &&
+        !typeOnly &&
+        !insideNetworkCommand(node)
+      ) {
+        report(node, "transport-load", name);
       } else {
         edges.push({
           target,
@@ -162,17 +201,26 @@ export function checkArchitecture(files) {
      * @param {ts.Node} node
      */
     const visit = (node) => {
+      if (layer === "wire" && ambient.isAmbient(node))
+        report(node, "wire-ambient");
       if (
         ts.isImportDeclaration(node) ||
         (ts.isExportDeclaration(node) && node.moduleSpecifier)
       ) {
-        checkImport(node, node.moduleSpecifier);
+        checkImport(
+          node,
+          node.moduleSpecifier,
+          ts.isImportDeclaration(node)
+            ? node.importClause?.isTypeOnly
+            : node.isTypeOnly,
+        );
       } else if (ts.isImportTypeNode(node)) {
         checkImport(
           node,
           ts.isLiteralTypeNode(node.argument)
             ? node.argument.literal
             : undefined,
+          true,
         );
       } else if (ts.isImportEqualsDeclaration(node)) {
         report(node, "unsupported-import");

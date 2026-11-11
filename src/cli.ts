@@ -195,7 +195,7 @@ export async function runTcp(
       return 2;
     }
 
-    const { sendBatches } = await import("./session/tcp.ts");
+    const { sendBatches } = await import("./transport/tcp.ts");
     await sendBatches([frame], {
       ...(config.target ?? { host: "127.0.0.1", port: 55027 }),
       ...config.retry,

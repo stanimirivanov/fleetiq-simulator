@@ -1,7 +1,9 @@
 # Wire encoding
 
 Keep record encoding deterministic and independent of sockets, files, time and
-Effect. The closed Ajv schema validates before frame allocation. Preserve signed
+Effect. The architecture gate catches reviewed ambient APIs such as Date,
+Math.random, fetch, and globalThis while allowing local shadowing. Treat this
+as a narrow guard for accidental effects. The closed Ajv schema validates before frame allocation. Preserve signed
 coordinates, exact u64 values, big-endian fields and raw IO widths. Derive
 counts and lengths from validated records. Keep CRC coverage and TCP envelope
 boundaries explicit.
