@@ -197,3 +197,34 @@ Maintainer setup and qualification (not performed by this PR):
 
 References: [GitHub code ownership](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
 and [ruleset review/status requirements](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets).
+
+## Wire oracle and qualification scope
+
+`node --test tests/codec8.test.ts tests/codec8-oracle.test.ts` is the focused
+wire gate; both suites run once in the canonical wire coverage group.
+`tests/codec8-vectors.ts` cites the two applicable single-record TCP examples
+from [Teltonika Codec 8](https://wiki.teltonika-gps.com/view/Codec#Codec_8).
+The third literal example retains its manufacturer CRC and proves rejection
+by the current single-record profile. UDP and later-codec fixtures belong to
+those protocol slices; their support is not implied by this oracle.
+
+`tests/codec8-oracle.ts` is test-only and imports no production code, schema,
+layout constants or types. It uses a bounded sequential cursor and an MSB-first
+CRC division with reflected input/output, independent of production's LSB-first
+algorithm. Literal vectors anchor the decoder and encoder. Fixed seeds exercise
+256 reproducible records with signed coordinates, exact u64 timestamps, field
+limits/interior values, 0/1/4/64 IO entries and all four IO widths. Negative cases
+cover truncation, trailing data, bit corruption and checksum-valid malformed
+counts/fields. These are deterministic generated checks, not exhaustive proof
+or a qualified mutation-testing toolchain.
+
+Altitude stays raw `u16`, matching the current platform contract. The cited
+manufacturer table gives width and units without resolving signedness; settle
+that question before extending the contract to later codecs.
+
+The platform gate `cargo test --locked -p fleetiq-teltonika` passed independently
+at revision `28823c547a4f7a5bd646a58e580c659d43e967d2`. It does not decode this
+simulator's generated output. The approved separate runner/CI provisioning slice
+is tracked in [issue #24](https://github.com/stanimirivanov/fleetiq-simulator/issues/24).
+Neither local oracle tests nor that future software gate prove physical-device
+or installed-product qualification.
