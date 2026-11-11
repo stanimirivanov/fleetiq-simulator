@@ -50,16 +50,23 @@ function verify(document, scheduled) {
   if (scheduled) assert.equal(job.get("if"), "github.ref == 'refs/heads/main'");
   const steps = job.get("steps");
   assert.ok(isSeq(steps));
-  const values = steps.items.map((step) => {
+  const values = steps.items.map((step, index) => {
     assert.ok(isMap(step));
     for (const entry of step.items)
       assert.ok(
-        ["name", "uses", "with", "run", "shell"].includes(String(entry.key)),
+        [
+          "name",
+          "uses",
+          "with",
+          "run",
+          "shell",
+          ...(!scheduled && index === 5 ? ["env"] : []),
+        ].includes(String(entry.key)),
         "unexpected step authority or skip",
       );
     return step.toJSON();
   });
-  assert.equal(values.length, scheduled ? 7 : 6);
+  assert.equal(values.length, 7);
   assert.deepEqual(values[0], {
     uses: checkout,
     with: {
@@ -92,6 +99,20 @@ function verify(document, scheduled) {
     assert.match(
       values[5].run,
       /test "\$\(git rev-parse HEAD\)" = "\$\(git rev-parse refs\/remotes\/origin\/main\)"/,
+    );
+  }
+  if (!scheduled) {
+    assert.equal(values[5].shell, "bash");
+    assert.deepEqual(values[5].env, {
+      BASE_SHA: ["$", "{{ github.event.pull_request.base.sha }}"].join(""),
+    });
+    assert.match(
+      values[5].run,
+      /git show "\$BASE_SHA:tools\/floor\.mjs" \| node --input-type=module - "\$BASE_SHA"/,
+    );
+    assert.match(
+      values[5].run,
+      /elif test "\$BASE_SHA" = 2f86fa158e7996070257f61d6cdfeb948a041b1b/,
     );
   }
   assert.equal(values.at(-1).run, scheduled ? "pnpm security" : "pnpm check");
@@ -212,4 +233,35 @@ test("history guard accepts full main and rejects shallow or mismatched checkout
     "unmatched",
   ]);
   assert.equal(guard(origin).status, 1);
+});
+
+test("verification inputs and the ownership policy have a maintainer owner", () => {
+  const rules = readFileSync(
+    new URL("../.github/CODEOWNERS", import.meta.url),
+    "utf8",
+  )
+    .split("\n")
+    .filter((line) => line && !line.startsWith("#"))
+    .map((line) => line.trim().split(/\s+/u));
+  for (const rule of rules) assert.equal(rule[1], "@stanimirivanov");
+  for (const path of [
+    "/.github/",
+    "/.githooks/",
+    "/tools/",
+    "/tests/",
+    "/**/AGENTS.md",
+    "/CONSTRAINTS.md",
+    "/HARNESS.md",
+    "/package.json",
+    "/pnpm-lock.yaml",
+    "/tsconfig*.json",
+    "/biome.json",
+    "/eslint.config.mjs",
+    "/.gitleaks.toml",
+    "/.gitignore",
+  ])
+    assert.ok(
+      rules.some((rule) => rule[0] === path),
+      path,
+    );
 });
