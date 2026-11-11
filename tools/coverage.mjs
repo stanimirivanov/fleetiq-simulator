@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const groups = [
   {
     name: "wire",
-    tests: ["tests/codec8.test.ts"],
+    tests: ["tests/codec8.test.ts", "tests/codec8-oracle.test.ts"],
     sources: ["src/wire/codec8.ts"],
     lines: 90,
     branches: 85,
