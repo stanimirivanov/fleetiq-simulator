@@ -1,12 +1,13 @@
 import { createConnection, type Socket } from "node:net";
 import { Cause, Effect, Exit } from "effect";
 import {
+  type DeliveryReceipt,
   SessionError,
   type SessionLimits,
   type SessionOptions,
   sessionLimits,
 } from "../session/state.ts";
-import { crc16Arc } from "../wire/codec8.ts";
+import { Codec8Frame, FrameError } from "../wire/codec8.ts";
 
 function readReply(
   socket: Socket,
@@ -125,35 +126,33 @@ function openSocket({ host, port }: SessionOptions) {
   );
 }
 
-function freezeFrame(frame: Buffer): Buffer {
-  if (
-    frame.length < 45 ||
-    frame.length > 1280 ||
-    frame.readUInt32BE(0) !== 0 ||
-    frame.readUInt32BE(4) !== frame.length - 12 ||
-    frame[8] !== 8 ||
-    frame[9] !== 1 ||
-    frame.at(-5) !== 1 ||
-    frame.readUInt32BE(frame.length - 4) !== crc16Arc(frame.subarray(8, -4))
-  )
-    throw new SessionError("invalid-session");
-  return Buffer.from(frame);
-}
+// A run is bounded to sixteen batches. Wire owns the independent per-frame
+// byte limit and currently admits exactly one record in each Codec 8 frame.
+const maxBatches = 16;
 
 export async function sendBatches(
-  frames: readonly Buffer[],
+  frames: readonly (Buffer | Codec8Frame)[],
   options: SessionOptions,
-): Promise<void> {
+): Promise<DeliveryReceipt> {
   const limits = sessionLimits(options);
-  if (frames.length === 0 || frames.length > 16)
+  if (frames.length === 0 || frames.length > maxBatches)
     throw new SessionError("invalid-session");
-  const frozen = frames.map(freezeFrame);
+  const frozen = frames.map((frame) => {
+    try {
+      return Codec8Frame.snapshot(frame);
+    } catch (error) {
+      if (error instanceof FrameError)
+        throw new SessionError("invalid-session");
+      throw error;
+    }
+  });
   const login = Buffer.alloc(17);
   login.writeUInt16BE(15);
   login.write(options.identity, 2, "ascii");
 
   const program = Effect.gen(function* () {
     let next = 0;
+    let acknowledgedRecords = 0;
     let failures = 0;
     const connection = Effect.gen(function* () {
       yield* remainingBudget(limits);
@@ -163,9 +162,10 @@ export async function sendBatches(
         return yield* Effect.fail(new SessionError("login-refused"));
 
       for (const frame of frozen.slice(next)) {
-        const reply = yield* exchange(socket, frame, 4, limits);
-        if (reply.readUInt32BE() !== frame[9])
+        const reply = yield* exchange(socket, frame.bytes, 4, limits);
+        if (reply.readUInt32BE() !== frame.recordCount)
           return yield* Effect.fail(new SessionError("ack-count"));
+        acknowledgedRecords += frame.recordCount;
         next++;
         failures = 0;
         if (limits.connectionPolicy === "single-batch") break;
@@ -191,6 +191,10 @@ export async function sendBatches(
       }),
     );
     while (next < frozen.length) yield* send;
+    return {
+      status: "acknowledged",
+      recordCount: acknowledgedRecords,
+    } satisfies DeliveryReceipt;
   });
 
   const exit = await Effect.runPromiseExit(program, { signal: options.signal });
@@ -199,4 +203,5 @@ export async function sendBatches(
       throw new SessionError("cancelled");
     throw Cause.squash(exit.cause);
   }
+  return exit.value;
 }

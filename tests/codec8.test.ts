@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  Codec8Frame,
   crc16Arc,
   encodeCodec8,
+  encodeCodec8Payload,
   type Record8,
   recordSchema,
 } from "../src/wire/codec8.ts";
@@ -73,4 +75,56 @@ test("the typed record fixture covers every required schema property", () => {
     Object.keys(typed).sort(),
   );
   assert.equal(encodeCodec8(typed).toString("hex"), frame);
+});
+
+test("wire frame metadata stays tied to its private byte snapshot", () => {
+  const source = Buffer.from(frame, "hex");
+  const frozen = Codec8Frame.fromBytes(source);
+  source.fill(0);
+  assert.equal(frozen.recordCount, 1);
+  const exposed = frozen.snapshot();
+  assert.equal(exposed.bytes.toString("hex"), frame);
+  new Uint8Array(exposed.bytes.buffer).fill(0);
+  exposed.recordCount = 99;
+  assert.equal(frozen.recordCount, 1);
+  assert.equal(frozen.snapshot().bytes.toString("hex"), frame);
+  assert.equal(
+    encodeCodec8Payload(record).toString("hex"),
+    frame.slice(16, -8),
+  );
+});
+
+test("wire validates the single-record TCP envelope before exposing metadata", () => {
+  const good = Buffer.from(frame, "hex");
+  for (const offset of [0, 4, 8, 9, good.length - 5, good.length - 1]) {
+    const damaged = Buffer.from(good);
+    damaged[offset] = (damaged[offset] ?? 0) ^ 1;
+    assert.throws(
+      () => Codec8Frame.fromBytes(damaged),
+      /^Error: invalid-frame$/,
+    );
+  }
+  for (const damaged of [Buffer.alloc(0), Buffer.alloc(1281)]) {
+    assert.throws(
+      () => Codec8Frame.fromBytes(damaged),
+      /^Error: invalid-frame$/,
+    );
+  }
+});
+
+test("frame metadata rejects fabricated brands and a checksum-valid two-record declaration", () => {
+  for (const fabricated of [
+    Object.create(Codec8Frame.prototype),
+    Object.create(null),
+  ]) {
+    assert.throws(
+      () => Codec8Frame.snapshot(fabricated),
+      /^Error: invalid-frame$/,
+    );
+  }
+  const two = Buffer.from(frame, "hex");
+  two[9] = 2;
+  two[two.length - 5] = 2;
+  two.writeUInt32BE(crc16Arc(two.subarray(8, -4)), two.length - 4);
+  assert.throws(() => Codec8Frame.fromBytes(two), /^Error: invalid-frame$/);
 });

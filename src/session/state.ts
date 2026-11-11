@@ -8,6 +8,8 @@ export const sessionDefaults = {
   connectionPolicy: "single-batch",
 } as const;
 
+export type DeliveryReceipt = { status: "acknowledged"; recordCount: number };
+
 export type SessionOptions = {
   host: string;
   port: number;

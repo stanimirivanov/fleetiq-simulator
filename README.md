@@ -88,3 +88,13 @@ identity file, then session bounds and transport. The first failing stage wins.
 Filesystem failures are classified at the operation that produced them.
 Unexpected defects produce only `internal-error`, without a stack trace or
 exception text.
+
+The wire layer exposes the AVL payload separately from the TCP envelope.
+`Codec8Frame` validates a single-record TCP envelope and retains a private
+copy of its bytes and declared count. Transport accepts these frames and
+continues to accept raw Buffer inputs through wire validation.
+
+A receipt counts each locally acknowledged batch once, even if it was sent
+several times. After a connection failure without an ACK, remote acceptance
+is unknown. Exhausted runs emit a failure and no success receipt. The receiver
+may already have accepted some or all transmitted records.
