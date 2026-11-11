@@ -49,7 +49,7 @@ checks complement the loopback tests that protect transport semantics.
 | Point | Run | Failure action |
 | --- | --- | --- |
 | Edit | `node --test tests/codec8.test.ts` or `node --test tests/tcp.test.ts` | Inspect the failing assertion and reproduce the smallest case |
-| Stage | `pnpm check:fast` | Fix Biome, strict types or import diagnostics |
+| Stage | `pnpm floor && pnpm check:fast` | Remove prohibited indexed paths; fix floor, style, type or import diagnostics |
 | Pre-PR | `pnpm install --frozen-lockfile`, `pnpm check`, then `pnpm security` on the final lockfile | Fix the cause or report a missing tool, unavailable advisory service or other incomplete gate |
 | PR CI | Existing `Simulator verification / check` job runs `pnpm check` | Attach concise, sanitized failure evidence to the task and return to the relevant narrow check |
 
@@ -70,8 +70,9 @@ To enable the optional hook, first inspect `git config --get core.hooksPath` and
 preserve any hooks already in use. Then run
 `git config --local core.hooksPath .githooks` if appropriate. The hook checks
 staged changes by requiring tracked and unignored worktree contents to match
-the index before it runs `pnpm check:fast`. Stage the intended files or isolate
-unrelated edits in another checkout. CI is the authority because local hooks
+the index before it runs `pnpm floor` followed by `pnpm check:fast`. Fetch
+`origin/main` before committing so the floor gate has its immutable local
+baseline. Stage the intended files or isolate unrelated edits in another checkout. CI is the authority because local hooks
 can be bypassed and ignored build/dependency inputs are local.
 
 Progressive hardening:
@@ -137,6 +138,27 @@ development-only parser so quoted scalars and comments cannot substitute for
 actual workflow settings. Mutation controls reject shallow/wrong-ref checkouts,
 floating action pins, elevated permissions and skipped scans. Required review
 depends on the external ruleset below; H8 adds the local floor sensor.
+
+## Private inputs and captures
+
+The ignore policy covers `private-*` names and `.bin`, `.pcap` and `.pcapng`
+extensions, including case variants and nested directories. Private operator
+inputs and captures belong outside the checkout. Keep reviewed synthetic wire
+fixtures as hexadecimal text in TypeScript files.
+
+Ignore rules reduce accidental staging; `pnpm floor` also checks every indexed
+path using NUL-delimited Git output. A force-added ignored file, or a prohibited
+file already committed with no current diff, still fails. Every path component
+is checked, including ignored directory names. Rejection occurs before candidate
+contents are read and emits a fixed category without filenames. The checker
+never deletes working copies; remove an offending path from the index and move
+private inputs outside the checkout. Ignored untracked artifacts are outside
+this path gate's index scope.
+
+The optional hook runs the floor gate after index/worktree agreement and before
+fast verification. CI retains trusted-base execution after this change merges.
+Filename rules do not replace redacted secret scanning or identify all sensitive
+content; they do not erase historical copies.
 
 ## Verification-policy authority
 
