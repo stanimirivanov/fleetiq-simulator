@@ -1,0 +1,33 @@
+name: Platform decoder qualification
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.18.0
+      - run: npm install --global pnpm@12.5.1 --allow-scripts=pnpm@12.5.1 --strict-allow-scripts
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch exact public platform source outside the simulator tree
+        env:
+          PLATFORM_REVISION: bd1cac83b44edef748ec92f9b3142337c7aa1ccc
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/fleetiq-platform"
+          git -C "$RUNNER_TEMP/fleetiq-platform" remote add origin https://github.com/stanimirivanov/fleetiq-platform.git
+          git -C "$RUNNER_TEMP/fleetiq-platform" fetch --depth=1 origin "$PLATFORM_REVISION"
+          git -C "$RUNNER_TEMP/fleetiq-platform" checkout --detach FETCH_HEAD
+      - name: Install exact native Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt
+      - name: Check adapter formatting
+        run: rustfmt +1.99.1 --check --edition 2024 tools/platform-adapter.rs
+      - name: Qualify simulator output with the verified platform source
+        run: pnpm test:platform "$RUNNER_TEMP/fleetiq-platform"

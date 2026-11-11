@@ -1,0 +1,5 @@
+{
+  "repository": "stanimirivanov/fleetiq-platform",
+  "revision": "bd1cac83b44edef748ec92f9b3142337c7aa1ccc",
+  "rustToolchain": "1.99.1"
+}
