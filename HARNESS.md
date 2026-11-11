@@ -92,3 +92,47 @@ Progressive hardening:
    acceptance gates in their owning simulator/deployment slices. Record actual
    measurements before setting new budgets. Keep CI and operator evidence
    separate from physical hardware qualification.
+
+## Security between pull requests
+
+`Scheduled security / security` runs `pnpm security` at **04:17 UTC daily**
+and on manual dispatch from `main`. The PR job remains
+`Simulator verification / check` and still runs the complete canonical gate,
+including both secret and live advisory scans. Neither job has write permission.
+Checkout and setup-node use upstream-verified full commit SHAs (v7 at adoption);
+review the upstream commit and workflow controls when updating pins.
+
+The scheduled checkout explicitly fetches `refs/heads/main` with full history.
+Before scanning, it rejects shallow history or a HEAD different from fetched
+`origin/main`, and records the exact checked-out SHA in the run summary. A main
+advance during queueing can make this SHA newer than the event SHA. Gitleaks
+checks the worktree, index and history of **all locally available refs**
+(its pinned default is `git log -p -U0 --full-history --all --diff-filter=tuxdb`).
+This includes main and merged parents, plus other branches/tags fetched by
+checkout. It does not prove coverage of server-only or unreachable/deleted refs,
+forks or private operator files. See the [pinned scanner implementation](https://github.com/gitleaks/gitleaks/blob/v8.30.1/sources/git.go). The clean scheduled index has
+no staged edits. Dependencies are installed from the frozen lockfile and audited
+against the live registry with the unchanged high/critical failure threshold.
+No findings are suppressed or cached as a permanent clearance; scanner or
+advisory-service failures leave the gate incomplete and failing.
+
+Repository maintainers own triage of failed scheduled runs: inspect the failed
+step, keep raw secret reports private, rotate any exposed credential, and open
+a bounded fix issue/PR. For tool or service failures, restore the tool/service
+and rerun the workflow; do not bypass the gate. Use GitHub Actions failure
+notifications and inspect the latest scheduled run before relying on it.
+
+After merge, a maintainer must dispatch the workflow on `main` and verify its
+recorded SHA, full-history guard and security result, then observe a scheduled
+run. This PR does not claim that hosted execution or branch protection has been
+qualified. [GitHub schedules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+require the workflow on the default branch, can be delayed or dropped under
+load, and are disabled in public repositories after 60 days without activity.
+They are periodic detection, not an availability guarantee. If the default
+branch is renamed, update the explicit ref and dispatch guard together.
+
+The YAML workflow tests use `yaml` 2.9.1 (ISC, no runtime dependencies), a
+development-only parser so quoted scalars and comments cannot substitute for
+actual workflow settings. Mutation controls reject shallow/wrong-ref checkouts,
+floating action pins, elevated permissions and skipped scans. Future required
+review and suppression-floor controls belong to H8.
