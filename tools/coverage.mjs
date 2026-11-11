@@ -37,6 +37,7 @@ export const groups = [
       "tests/architecture.test.mjs",
       "tests/comments.test.mjs",
       "tests/coverage.test.mjs",
+      "tests/floor.test.mjs",
       "tests/quality.test.mjs",
       "tests/transport-load.test.mjs",
       "tests/typecheck.test.mjs",

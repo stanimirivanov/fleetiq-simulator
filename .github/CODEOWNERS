@@ -1,0 +1,15 @@
+# Verification authority; enable required code-owner review in the main ruleset.
+/.github/ @stanimirivanov
+/.githooks/ @stanimirivanov
+/tools/ @stanimirivanov
+/tests/ @stanimirivanov
+/**/AGENTS.md @stanimirivanov
+/CONSTRAINTS.md @stanimirivanov
+/HARNESS.md @stanimirivanov
+/package.json @stanimirivanov
+/pnpm-lock.yaml @stanimirivanov
+/tsconfig*.json @stanimirivanov
+/biome.json @stanimirivanov
+/eslint.config.mjs @stanimirivanov
+/.gitleaks.toml @stanimirivanov
+/.gitignore @stanimirivanov

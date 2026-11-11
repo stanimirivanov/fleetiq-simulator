@@ -35,3 +35,11 @@ Secret scan failures name the worktree, index or history phase. Findings report
 the total count and safe metadata for the first finding. Unreviewed names and
 locations are withheld. Inspect the affected scan privately when metadata is
 withheld or when multiple findings are present. Never attach a raw report.
+
+
+`pnpm floor` checks against fetched origin/main's merge base; an explicit full
+ancestor SHA reproduces PR results. Preserve base-revision execution in PR CI
+and its exact-SHA bootstrap restriction. Add Git fixtures when changing the
+floor sensor. Never add a self-approved bypass or print candidate comment/test
+text. CODEOWNERS and the external main ruleset govern deliberate policy changes;
+see HARNESS.md for qualification and intentional-maintenance procedures.

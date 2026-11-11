@@ -84,10 +84,11 @@ Progressive hardening:
    changes to verification policy. Verify the actual status context in GitHub
    and test the ruleset with a failing PR. Add a merge-group trigger before
    requiring this check in a merge queue. Ruleset configuration is external.
-3. **Guard the floor.** When there is a reviewed baseline, add a base-aware check
-   for new suppression directives, skipped or deleted tests and weakened
-   thresholds. Qualify it against allowed maintenance, deliberate violations
-   and missing baseline history. Until then these changes require review.
+3. **Guard the floor.** `pnpm floor` compares the candidate worktree to a Git
+   ancestor, detecting new suppressions, disabled/focused tests, removed test
+   declarations, changed verification scripts and reduced coverage floors.
+   See the authority and review procedure below; CODEOWNERS enforcement and
+   merge-bypass restrictions still require an external ruleset.
 4. **Ratchet with evidence.** Add executable image, resource and installed
    acceptance gates in their owning simulator/deployment slices. Record actual
    measurements before setting new budgets. Keep CI and operator evidence
@@ -134,5 +135,65 @@ branch is renamed, update the explicit ref and dispatch guard together.
 The YAML workflow tests use `yaml` 2.9.1 (ISC, no runtime dependencies), a
 development-only parser so quoted scalars and comments cannot substitute for
 actual workflow settings. Mutation controls reject shallow/wrong-ref checkouts,
-floating action pins, elevated permissions and skipped scans. Future required
-review and suppression-floor controls belong to H8.
+floating action pins, elevated permissions and skipped scans. Required review
+depends on the external ruleset below; H8 adds the local floor sensor.
+
+## Verification-policy authority
+
+`pnpm floor` is the first canonical stage. Locally it uses the merge base of
+HEAD and fetched `origin/main`; run `git fetch origin main` before qualification.
+For reproduction, `node tools/floor.mjs <40-character-base-SHA>` selects an exact
+ancestor. Missing objects, unrelated history, unsupported file entries and Git
+errors fail closed. The guard reads committed, staged, unstaged and untracked
+candidate code, excluding Git-ignored build/dependency output.
+
+The sensor uses the existing TypeScript parser (no new dependency). It compares
+actual comments for TypeScript/Biome/ESLint and coverage suppressions, identifies
+static node:test declarations/options and context skip controls, and compares
+test-name multisets across changed suites. Moving an unchanged declaration is
+allowed; deleting or renaming it requires review. Existing suppression comments
+may move within a file; new or edited suppression comments fail. Coverage group
+names and numeric line/branch floors must remain readable and cannot decrease.
+Existing package scripts cannot change, except prepending this floor check to
+`check`. Added tests and ordinary implementation changes remain allowed.
+
+This is a conservative structural sensor, not a proof of test semantics: it
+cannot prove assertions remain meaningful, resolve arbitrary dynamic test
+factories/options, or detect every semantic weakening inside a checker. Review
+owns those cases. Failures emit fixed categories and recovery instructions;
+inspect the diff privately rather than publishing candidate text or filenames.
+
+PR CI passes the event's exact base SHA and runs **that base's** `floor.mjs`
+through Node stdin before candidate verification. Candidate edits cannot replace
+the already-merged checker. Introduction is allowed only against H7 merge
+`2f86fa158e7996070257f61d6cdfeb948a041b1b`; any other missing base checker fails.
+The bootstrap branch becomes unreachable once H8 is the base. The scheduled
+security workflow is unchanged. Local execution uses candidate tooling; the
+workflow itself, parser dependency and other harness changes still require review.
+
+`.github/CODEOWNERS` assigns verification inputs, tests, guides and ownership
+policy to the repository owner. Whole-file ownership protects `package.json`
+scripts because CODEOWNERS cannot select individual JSON fields. For intentional
+blocked maintenance, retain the original protection where possible; otherwise
+record the exact diff, rationale, replacement evidence and explicit maintainer
+approval in a dedicated policy PR. A narrowly authorized ruleset bypass must be
+recorded externally if needed; there is no in-repository skip flag or self-issued
+allowlist. Do not weaken the checker merely to get an ordinary PR green.
+
+Maintainer setup and qualification (not performed by this PR):
+
+1. On `main`, require PRs, the actual `Simulator verification / check` status
+   context, code-owner approval, dismissal of stale approvals, and approval of
+   the most recent push by an eligible reviewer. Restrict bypass actors; do not
+   give the coding agent routine bypass authority. Add another eligible owner
+   when the sole owner authors a PR, since authors cannot approve their own PRs.
+2. After merge, verify GitHub accepts the CODEOWNERS entries and requests the
+   correct reviewer on a policy PR. Use deliberate failing fixtures to verify a
+   failed status and a missing owner approval both prevent merging. Verify that
+   a later push invalidates the required approval. Record URLs/results privately.
+3. Until these checks are observed, report repository sensors as implemented
+   and external merge enforcement as **unqualified**. Do not claim CODEOWNERS
+   alone blocks merges or configure merge-queue requirements without a trigger.
+
+References: [GitHub code ownership](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
+and [ruleset review/status requirements](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets).
