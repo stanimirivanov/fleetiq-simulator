@@ -4,6 +4,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
+/** @typedef {{identity: string, shape: string | undefined}} TestDeclaration */
+
+const testPrinter = ts.createPrinter({ removeComments: true });
+
 /** Runs bounded, argument-separated Git and withholds unreviewed error output.
  * @param {string} root @param {string[]} args
  */
@@ -31,6 +35,95 @@ function removed(before, after) {
 }
 
 /**
+ * Prints the complete call with only its static title replaced. The compiler's
+ * printer preserves operators, options and callbacks while ignoring trivia.
+ *
+ * @param {ts.CallExpression} call
+ * @param {ts.SourceFile} source
+ */
+function renamedShape(call, source) {
+  const first = call.arguments[0];
+  if (!first || !ts.isStringLiteralLike(first)) return undefined;
+  const normalized = ts.factory.updateCallExpression(
+    call,
+    call.expression,
+    call.typeArguments,
+    [ts.factory.createStringLiteral(""), ...call.arguments.slice(1)],
+  );
+  return testPrinter.printNode(ts.EmitHint.Expression, normalized, source);
+}
+
+/**
+ * Consumes each declaration once: exact matches, retained names, then unchanged
+ * shapes for literal renames. Ambiguous combinations can conservatively fail.
+ *
+ * @param {TestDeclaration[]} before
+ * @param {TestDeclaration[]} after
+ */
+function removedTests(before, after) {
+  const remaining = [...after];
+
+  /** Removes one matching candidate without collapsing duplicate declarations.
+   * @param {TestDeclaration[]} pending
+   * @param {(old: TestDeclaration, next: TestDeclaration) => boolean} matches
+   */
+  function consume(pending, matches) {
+    return pending.filter((old) => {
+      const index = remaining.findIndex((next) => matches(old, next));
+      if (index < 0) return true;
+      remaining.splice(index, 1);
+      return false;
+    });
+  }
+  const exact = consume(
+    before,
+    (old, next) => old.identity === next.identity && old.shape === next.shape,
+  );
+  const renamed = consume(exact, (old, next) => old.identity === next.identity);
+  return (
+    consume(
+      renamed,
+      (old, next) => old.shape !== undefined && old.shape === next.shape,
+    ).length > 0
+  );
+}
+
+/**
+ * Accepts only an unchanged plain command chain followed by extra script calls.
+ * Namespaced targets avoid pnpm built-ins; no shell syntax or arguments may be
+ * added, and every target must name an own, nonempty package script.
+ *
+ * @param {unknown} before
+ * @param {unknown} after
+ * @param {Record<string, unknown>} scripts
+ */
+function additiveCommand(before, after, scripts) {
+  if (
+    typeof before !== "string" ||
+    typeof after !== "string" ||
+    !after.startsWith(before)
+  )
+    return false;
+  if (
+    !before
+      .split(" && ")
+      .every((command) =>
+        /^(?:pnpm|node|tsc|biome|eslint) [A-Za-z0-9_./:@= *-]+$/u.test(command),
+      )
+  )
+    return false;
+  const suffix = after.slice(before.length).split(" && pnpm ");
+  if (suffix.shift() !== "" || !suffix.length) return false;
+  return suffix.every(
+    (name) =>
+      /^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9:-]*$/u.test(name) &&
+      Object.hasOwn(scripts, name) &&
+      typeof scripts[name] === "string" &&
+      scripts[name].trim().length > 0,
+  );
+}
+
+/**
  * Gives direct and computed literal keys the same decoded spelling. Computed
  * identifiers and expressions stay unresolved; inspecting a fixture never runs it.
  *
@@ -51,14 +144,14 @@ function staticPropertyName(node) {
 }
 
 /** Reads real comments and node:test declarations, excluding fixture strings.
- * Names identify tests across moves; renames deliberately require review.
+ * Retained names preserve existing behavior; literal renames need a full shape.
  * @param {string} text @param {string} file
  */
 function inspect(text, file) {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const comments = new Set();
 
-  /** @type {string[]} */
+  /** @type {TestDeclaration[]} */
   const tests = [];
 
   /** @type {string[]} */
@@ -125,7 +218,7 @@ function inspect(text, file) {
           const identity = ts.isStringLiteralLike(first)
             ? first.text
             : first.getText(source);
-          tests.push(identity);
+          tests.push({ identity, shape: renamedShape(node, source) });
           for (const argument of node.arguments) {
             if (
               ts.isArrowFunction(argument) ||
@@ -258,7 +351,11 @@ export function checkFloor(base, root = ".") {
     ].filter(Boolean),
   );
   const problems = new Set();
+
+  /** @type {TestDeclaration[]} */
   const previousTests = [];
+
+  /** @type {TestDeclaration[]} */
   const currentTests = [];
   for (const file of files) {
     if (!/\.(?:ts|mjs|js)$/u.test(file) && file !== "package.json") continue;
@@ -282,6 +379,7 @@ export function checkFloor(base, root = ".") {
       for (const [name, command] of Object.entries(oldScripts)) {
         if (
           newScripts[name] !== command &&
+          !additiveCommand(command, newScripts[name], newScripts) &&
           !(
             name === "check" &&
             newScripts[name] === `pnpm floor && ${command}` &&
@@ -315,7 +413,7 @@ export function checkFloor(base, root = ".") {
       }
     }
   }
-  if (removed(previousTests, currentTests)) problems.add("test-removed");
+  if (removedTests(previousTests, currentTests)) problems.add("test-removed");
   return [...problems].sort();
 }
 
