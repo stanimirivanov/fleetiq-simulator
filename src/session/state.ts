@@ -1,5 +1,13 @@
 export type ConnectionPolicy = "single-batch" | "persistent-compliant-peer";
 
+export const defaultTarget = { host: "127.0.0.1", port: 55027 } as const;
+export const sessionDefaults = {
+  ackDeadlineMs: 30_000,
+  totalDeadlineMs: 600_000,
+  maxAttempts: 5,
+  connectionPolicy: "single-batch",
+} as const;
+
 export type SessionOptions = {
   host: string;
   port: number;
@@ -40,10 +48,10 @@ export function sessionLimits({
   host,
   port,
   identity,
-  ackDeadlineMs = 30_000,
-  totalDeadlineMs = 600_000,
-  maxAttempts = 5,
-  connectionPolicy = "single-batch",
+  ackDeadlineMs = sessionDefaults.ackDeadlineMs,
+  totalDeadlineMs = sessionDefaults.totalDeadlineMs,
+  maxAttempts = sessionDefaults.maxAttempts,
+  connectionPolicy = sessionDefaults.connectionPolicy,
   now = () => performance.now(),
   signal,
 }: SessionOptions) {

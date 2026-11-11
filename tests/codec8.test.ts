@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { crc16Arc, encodeCodec8 } from "../src/wire/codec8.ts";
+import {
+  crc16Arc,
+  encodeCodec8,
+  type Record8,
+  recordSchema,
+} from "../src/wire/codec8.ts";
 import { frame, record } from "./codec8-fixture.ts";
 
 test("encodes Teltonika's literal frame and CRC-16/ARC check value", () => {
@@ -55,4 +60,17 @@ test("rejects invalid ranges, unknown keys, widths and counts", () => {
   }
   const full = Array.from({ length: 64 }, (_, id) => ({ id, hex: "aabbccdd" }));
   assert.equal(encodeCodec8({ ...record, io: full })[35], 64);
+});
+
+test("the typed record fixture covers every required schema property", () => {
+  const typed = { ...record, schemaVersion: 1 } satisfies Record8;
+  assert.deepEqual(
+    Object.keys(recordSchema.properties).sort(),
+    Object.keys(typed).sort(),
+  );
+  assert.deepEqual(
+    [...recordSchema.required].sort(),
+    Object.keys(typed).sort(),
+  );
+  assert.equal(encodeCodec8(typed).toString("hex"), frame);
 });

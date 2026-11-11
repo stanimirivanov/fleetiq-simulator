@@ -1,6 +1,6 @@
-import { Ajv2020 } from "ajv/dist/2020.js";
+import { Ajv2020, type JSONSchemaType } from "ajv/dist/2020.js";
 
-type Record8 = {
+export type Record8 = {
   schemaVersion: 1;
   timestampMs: string;
   priority: number;
@@ -17,7 +17,7 @@ type Record8 = {
 const widths = [1, 2, 4, 8];
 const maxTimestamp = (1n << 64n) - 1n;
 const integer = (minimum: number, maximum: number) => ({
-  type: "integer",
+  type: "integer" as const,
   minimum,
   maximum,
 });
@@ -56,14 +56,36 @@ const properties = {
       },
     },
   },
-};
+} as const;
 
-const valid = new Ajv2020({ ownProperties: true }).compile<Record8>({
+export class RecordError extends Error {
+  constructor() {
+    super("invalid-record");
+  }
+}
+
+export const recordSchema = {
   type: "object",
   additionalProperties: false,
   properties,
-  required: Object.keys(properties),
-});
+  required: [
+    "schemaVersion",
+    "timestampMs",
+    "priority",
+    "longitudeE7",
+    "latitudeE7",
+    "altitude",
+    "angle",
+    "satellites",
+    "speed",
+    "eventId",
+    "io",
+  ],
+} satisfies JSONSchemaType<Record8>;
+
+const valid = new Ajv2020({ ownProperties: true }).compile<Record8>(
+  recordSchema,
+);
 
 export function crc16Arc(bytes: Uint8Array): number {
   let crc = 0;
@@ -77,9 +99,9 @@ export function crc16Arc(bytes: Uint8Array): number {
 }
 
 export function encodeCodec8(value: unknown): Buffer {
-  if (!valid(value)) throw new Error("invalid-record");
+  if (!valid(value)) throw new RecordError();
   const timestamp = BigInt(value.timestampMs);
-  if (timestamp > maxTimestamp) throw new Error("invalid-record");
+  if (timestamp > maxTimestamp) throw new RecordError();
 
   // 12-byte envelope + 3 codec/count bytes + 30 fixed record bytes.
   const size = value.io.reduce(
