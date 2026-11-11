@@ -265,3 +265,56 @@ test("verification inputs and the ownership policy have a maintainer owner", () 
       path,
     );
 });
+
+test("platform decoder workflow uses the reviewed source pin and exact Rust toolchain", () => {
+  const document = workflow("platform-decoder");
+  const value = document.toJS();
+  const pin = JSON.parse(
+    readFileSync(
+      new URL("../tools/platform-pin.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(value.on, { pull_request: null });
+  assert.deepEqual(value.permissions, { contents: "read" });
+  assert.deepEqual(Object.keys(value.jobs), ["qualify"]);
+  assert.equal(value.jobs.qualify["timeout-minutes"], 10);
+  const steps = value.jobs.qualify.steps;
+  assert.equal(steps.length, 8);
+  assert.deepEqual(steps[0], {
+    uses: checkout,
+    with: { "persist-credentials": false },
+  });
+  assert.deepEqual(steps[1], {
+    uses: setupNode,
+    with: { "node-version": "24.18.0" },
+  });
+  assert.deepEqual(steps[2], { run: pnpmInstall });
+  assert.deepEqual(steps[3], { run: "pnpm install --frozen-lockfile" });
+  assert.deepEqual(steps[4].env, { PLATFORM_REVISION: pin.revision });
+  assert.match(
+    steps[4].run,
+    /git .* fetch --depth=1 origin "\$PLATFORM_REVISION"/,
+  );
+  assert.match(
+    steps[4].run,
+    /https:\/\/github.com\/stanimirivanov\/fleetiq-platform.git/,
+  );
+  assert.match(steps[4].run, /checkout --detach FETCH_HEAD/);
+  assert.equal(
+    steps[5].run,
+    `rustup toolchain install ${pin.rustToolchain} --profile minimal --component rustfmt`,
+  );
+  assert.equal(
+    steps[6].run,
+    `rustfmt +${pin.rustToolchain} --check --edition 2024 tools/platform-adapter.rs`,
+  );
+  assert.equal(
+    steps[7].run,
+    'pnpm test:platform "$RUNNER_TEMP/fleetiq-platform"',
+  );
+  for (const step of steps) {
+    assert.equal(step.if, undefined);
+    assert.equal(step["continue-on-error"], undefined);
+  }
+});

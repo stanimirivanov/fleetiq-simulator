@@ -222,9 +222,51 @@ Altitude stays raw `u16`, matching the current platform contract. The cited
 manufacturer table gives width and units without resolving signedness; settle
 that question before extending the contract to later codecs.
 
-The platform gate `cargo test --locked -p fleetiq-teltonika` passed independently
-at revision `28823c547a4f7a5bd646a58e580c659d43e967d2`. It does not decode this
-simulator's generated output. The approved separate runner/CI provisioning slice
-is tracked in [issue #24](https://github.com/stanimirivanov/fleetiq-simulator/issues/24).
-Neither local oracle tests nor that future software gate prove physical-device
-or installed-product qualification.
+## Pinned platform decoder gate
+
+`pnpm test:platform /absolute/path/to/platform-checkout` qualifies actual
+simulator output against the reviewed revision and Rust release in
+`tools/platform-pin.json`. Prepare a separate public checkout outside the
+simulator tree (the workflow shows exact fetch commands), then install the
+pinned toolchain with rustfmt. The gate verifies HEAD, the checkout root, a clean
+tracked/untracked status and the source toolchain declaration before compiling.
+Missing source, wrong revision, dirty source, tool/build failures and any output
+mismatch fail; they never become a skipped success. Compiler and decoder output
+stay private; diagnostics identify the failing stage and recovery action.
+
+The pinned native package is std-only. The gate invokes `rustc +1.99.1` with
+edition 2024 and warnings denied on its real `packages/teltonika/src/lib.rs`,
+then compiles `tools/platform-adapter.rs` against that library. It does not copy
+or reinterpret the platform decoder and performs no Cargo dependency resolution.
+This qualifies the native wire API, not the Wasm component or the host pipeline.
+If a future pin adds native dependencies/features, review and update the build
+path explicitly. No platform working source or sibling checkout is changed.
+
+The H9 manufacturer and generated corpus is shared via
+`tests/codec8-corpus.ts`. Every accepted case compares codec, record count,
+exact decimal timestamp, priority, signed coordinates, raw altitude, angle,
+satellites, speed, event ID, IO order/IDs/widths and every raw value byte.
+Expected output is derived from input records, not the independent decoder.
+The simulator admits u64 timestamps and duplicate IO IDs; this platform revision
+rejects timestamps above i64::MAX and duplicate IDs as Malformed (code 1).
+Those original cases remain explicit rejection checks, with additional signed
+timestamp boundary, duplicate-ID and checksum (code 4) controls. Current results:
+262 cases, 165 exact accepted records and 97 expected rejections. A deliberately
+wrong expected result must fail the comparator during every real gate run.
+
+The adapter admits at most 512 lines, 2 MB input and 1280 bytes per frame.
+Subprocess output is bounded to 2 MB, each build command to 60 seconds and corpus
+execution to 10 seconds; artifacts are removed in a finally block. The separate
+PR workflow has a 10-minute deadline, fetches only the exact public platform
+revision into RUNNER_TEMP, installs the exact Rust toolchain and checks
+`rustfmt +1.99.1 --check --edition 2024 tools/platform-adapter.rs` before running
+the gate. Node-only canonical tests cover comparisons and failure controls;
+they do not require Rust or a network checkout.
+
+`Platform decoder qualification / qualify` is an additional required-check
+candidate; `Simulator verification / check` remains unchanged. A maintainer must
+observe the actual hosted status and configure/qualify its external main ruleset
+before claiming merge enforcement. This PR does not configure rulesets or claim
+hosted/physical-device/installed-product qualification. The separately run
+`cargo test --locked -p fleetiq-teltonika` remains a supporting package gate,
+not a substitute for feeding simulator output to the pinned decoder.

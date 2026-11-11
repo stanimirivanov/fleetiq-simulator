@@ -19,7 +19,8 @@
     "lint": "biome ci . --error-on-warnings && pnpm lint:comments",
     "lint:comments": "eslint tools",
     "architecture": "node tools/architecture.mjs",
-    "floor": "node tools/floor.mjs"
+    "floor": "node tools/floor.mjs",
+    "test:platform": "node tools/platform-decoder.mjs"
   },
   "dependencies": {
     "ajv": "8.20.0",
