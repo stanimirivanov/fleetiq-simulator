@@ -9,54 +9,124 @@ import {
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { type ConnectionPolicy, SessionError } from "./session/state.ts";
-import { encodeCodec8 } from "./wire/codec8.ts";
+import {
+  type ConnectionPolicy,
+  defaultTarget,
+  SessionError,
+} from "./session/state.ts";
+import { encodeCodec8, RecordError } from "./wire/codec8.ts";
 
 const maxInput = 16 * 1024;
 
+type InputCategory =
+  | "invalid-input-file"
+  | "invalid-identity-file"
+  | "input-too-large"
+  | "invalid-json"
+  | "input-unavailable"
+  | "output-unavailable"
+  | "invalid-run-config";
+
+class InputError extends Error {
+  readonly category: InputCategory;
+
+  constructor(category: InputCategory) {
+    super(category);
+    this.category = category;
+  }
+}
+
+// Only filesystem errno failures become input errors. Programming defects
+// at the same boundary retain the internal-error classification.
+function fileOperation<A>(operation: () => A, category: InputCategory): A {
+  try {
+    return operation();
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "errno" in error &&
+      typeof error.errno === "number" &&
+      "syscall" in error &&
+      typeof error.syscall === "string"
+    ) {
+      throw new InputError(category);
+    }
+    throw error;
+  }
+}
+
+function reportFailure(
+  error: unknown,
+  report: (category: string) => void,
+): number {
+  if (error instanceof InputError) {
+    report(error.category);
+    return 2;
+  }
+  if (error instanceof RecordError) {
+    report("invalid-record");
+    return 2;
+  }
+  if (error instanceof SessionError) {
+    report(error.category);
+    if (error.category === "cancelled") return 130;
+    return error.category === "invalid-session" ? 2 : 3;
+  }
+  report("internal-error");
+  return 1;
+}
+
 function readInput(path: string, privateFile = false): unknown {
-  const fd = openSync(
-    path,
-    constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW,
+  const fd = fileOperation(
+    () =>
+      openSync(
+        path,
+        constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW,
+      ),
+    "input-unavailable",
   );
   try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile()) throw new Error("invalid-input-file");
+    const stat = fileOperation(() => fstatSync(fd), "input-unavailable");
+    if (!stat.isFile()) throw new InputError("invalid-input-file");
     if (
       privateFile &&
       ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.())
     ) {
-      throw new Error("invalid-identity-file");
+      throw new InputError("invalid-identity-file");
     }
-    if (stat.size > maxInput) throw new Error("input-too-large");
+    if (stat.size > maxInput) throw new InputError("input-too-large");
     const buffer = Buffer.alloc(maxInput + 1);
     let offset = 0;
     while (offset < buffer.length) {
-      const read = readSync(fd, buffer, offset, buffer.length - offset, null);
+      const read = fileOperation(
+        () => readSync(fd, buffer, offset, buffer.length - offset, null),
+        "input-unavailable",
+      );
       if (read === 0) break;
       offset += read;
     }
-    if (offset > maxInput) throw new Error("input-too-large");
+    if (offset > maxInput) throw new InputError("input-too-large");
     try {
       return JSON.parse(
         new TextDecoder("utf-8", { fatal: true }).decode(
           buffer.subarray(0, offset),
         ),
       );
-    } catch {
-      throw new Error("invalid-json");
+    } catch (error) {
+      if (
+        error instanceof SyntaxError ||
+        (error instanceof TypeError &&
+          "code" in error &&
+          error.code === "ERR_ENCODING_INVALID_ENCODED_DATA")
+      ) {
+        throw new InputError("invalid-json");
+      }
+      throw error;
     }
   } finally {
-    closeSync(fd);
+    fileOperation(() => closeSync(fd), "input-unavailable");
   }
 }
-
-const inputErrors = new Set([
-  "invalid-input-file",
-  "input-too-large",
-  "invalid-json",
-  "invalid-record",
-]);
 
 export function run(
   args: string[],
@@ -81,39 +151,37 @@ export function run(
   try {
     frame = encodeCodec8(readInput(input));
   } catch (error) {
-    report(
-      error instanceof Error && inputErrors.has(error.message)
-        ? error.message
-        : "input-unavailable",
-    );
-    return 2;
+    return reportFailure(error, report);
   }
   if (command === "encode" && output) {
     try {
-      writeFileSync(output, frame, { mode: 0o600, flag: "wx" });
-    } catch {
-      report("output-unavailable");
-      return 2;
+      fileOperation(
+        () => writeFileSync(output, frame, { mode: 0o600, flag: "wx" }),
+        "output-unavailable",
+      );
+    } catch (error) {
+      return reportFailure(error, report);
     }
   }
   return 0;
 }
 
-type RunConfig = {
+export type RunConfig = {
+  schemaVersion: 1;
   identityFile: string;
   deviceId: string;
-  target?: { host: string; port: number };
+  target?: { transport: "tcp"; host: "127.0.0.1" | "::1"; port: number };
   connectionPolicy?: ConnectionPolicy;
   retry?: {
     ackDeadlineMs?: number;
     totalDeadlineMs?: number;
     maxAttempts?: number;
   };
-  record: unknown;
+  record: Record<string, unknown>;
 };
 
 const integer = { type: "integer" };
-const validRunConfig = new Ajv2020({ ownProperties: true }).compile<RunConfig>({
+export const runConfigSchema = {
   type: "object",
   additionalProperties: false,
   required: ["schemaVersion", "identityFile", "deviceId", "record"],
@@ -136,7 +204,7 @@ const validRunConfig = new Ajv2020({ ownProperties: true }).compile<RunConfig>({
         transport: { const: "tcp" },
         host: { enum: ["127.0.0.1", "::1"] },
         port: integer,
-      },
+      } satisfies Record<keyof NonNullable<RunConfig["target"]>, object>,
     },
     connectionPolicy: { enum: ["single-batch", "persistent-compliant-peer"] },
     retry: {
@@ -146,10 +214,14 @@ const validRunConfig = new Ajv2020({ ownProperties: true }).compile<RunConfig>({
         ackDeadlineMs: integer,
         totalDeadlineMs: integer,
         maxAttempts: integer,
-      },
+      } satisfies Record<keyof NonNullable<RunConfig["retry"]>, object>,
     },
-  },
-});
+  } satisfies Record<keyof RunConfig, object>,
+};
+
+const validRunConfig = new Ajv2020({ ownProperties: true }).compile<RunConfig>(
+  runConfigSchema,
+);
 
 export async function runTcp(
   args: string[],
@@ -164,8 +236,7 @@ export async function runTcp(
   try {
     const config = readInput(path);
     if (!validRunConfig(config)) {
-      report("invalid-run-config");
-      return 2;
+      throw new InputError("invalid-run-config");
     }
     const frame = encodeCodec8(config.record);
     let identity: string;
@@ -181,23 +252,25 @@ export async function runTcp(
         Object.keys(identities).length !== 1 ||
         !Object.hasOwn(identities, config.deviceId)
       )
-        throw new Error();
+        throw new InputError("invalid-identity-file");
       const value = (identities as Record<string, unknown>)[config.deviceId];
       if (
         typeof value !== "string" ||
         value.length !== 15 ||
         /[^0-9]/u.test(value)
       )
-        throw new Error();
+        throw new InputError("invalid-identity-file");
       identity = value;
-    } catch {
-      report("invalid-identity-file");
-      return 2;
+    } catch (error) {
+      if (error instanceof InputError)
+        throw new InputError("invalid-identity-file");
+      throw error;
     }
 
     const { sendBatches } = await import("./transport/tcp.ts");
     await sendBatches([frame], {
-      ...(config.target ?? { host: "127.0.0.1", port: 55027 }),
+      host: config.target?.host ?? defaultTarget.host,
+      port: config.target?.port ?? defaultTarget.port,
       ...config.retry,
       connectionPolicy: config.connectionPolicy,
       identity,
@@ -205,17 +278,7 @@ export async function runTcp(
     });
     return 0;
   } catch (error) {
-    if (error instanceof SessionError) {
-      report(error.category);
-      if (error.category === "cancelled") return 130;
-      return error.category === "invalid-session" ? 2 : 3;
-    }
-    report(
-      error instanceof Error && inputErrors.has(error.message)
-        ? error.message
-        : "input-unavailable",
-    );
-    return 2;
+    return reportFailure(error, report);
   }
 }
 

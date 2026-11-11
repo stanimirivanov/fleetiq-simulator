@@ -3,8 +3,8 @@
 For repository boundaries, agent instructions and verification commands, see
 [AGENTS.md](AGENTS.md) and the [coding harness](HARNESS.md).
 
-SIM-PR1 validates one versioned record offline and writes a Teltonika Codec 8
-TCP AVL frame. It accepts no device identity. TCP sessions are a later slice.
+The simulator validates a versioned Codec 8 record offline or sends it to an
+authorized loopback TCP listener using a private device identity file.
 
 Use Node 24.18.0, pnpm 12.5.1 and Gitleaks 8.30.1 on Linux. The CI workflow
 contains the checksum for the Linux x64 scanner release.
@@ -60,7 +60,7 @@ local listener. The version 1 run config contains these fields:
 | `deviceId` | A logical name, such as `sim-a` |
 | `identityFile` | A filename beside the config, containing a JSON object mapping that one logical name to its 15-digit device identity |
 | `target` | Optional `{"transport":"tcp","host":"127.0.0.1","port":55027}` (default). Only literal `127.0.0.1` and `::1` are accepted |
-| `retry` | Optional overrides for `ackDeadlineMs` (30,000), `maxAttempts` (5), and `totalDeadlineMs` (600,000) |
+| `retry` | Optional overrides for `ackDeadlineMs`, `maxAttempts`, and `totalDeadlineMs`. Defaults are defined in [session policy](src/session/state.ts) |
 | `connectionPolicy` | Optional `single-batch` (default) or `persistent-compliant-peer` |
 
 Keep both files in an owned private directory. The identity file must be owned
@@ -75,7 +75,16 @@ Persistent mode is for peers that emit exactly one ACK per batch. Count-only
 ACKs cannot distinguish an unsolicited duplicate of an earlier equal-count
 batch on a reused connection. This command sends one batch per run.
 
-Exit 0 prints a receipt for the wire ACK. Exit 2 is invalid input, 3 is a
+Exit 0 prints a receipt for the wire ACK. Exit 1 reports a redacted
+`internal-error` for an unexpected defect. Exit 2 is invalid input, 3 is a
 session failure, and 130 is cancellation. A retry can result in duplicate
 acceptance if the peer received a frame and its ACK was lost. Projection and
 browser verification are separate.
+
+
+Expected failures keep their existing exit codes and fixed categories. Run
+validation proceeds through arguments, config file and schema, record, private
+identity file, then session bounds and transport. The first failing stage wins.
+Filesystem failures are classified at the operation that produced them.
+Unexpected defects produce only `internal-error`, without a stack trace or
+exception text.

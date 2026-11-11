@@ -9,8 +9,20 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
-import { run as runCli } from "../src/cli.ts";
+import { mock, test } from "node:test";
+import { Ajv2020 } from "ajv/dist/2020.js";
+import {
+  type RunConfig,
+  run as runCli,
+  runConfigSchema,
+  runTcp,
+} from "../src/cli.ts";
+import {
+  defaultTarget,
+  sessionDefaults,
+  sessionLimits,
+} from "../src/session/state.ts";
+import { encodeCodec8 } from "../src/wire/codec8.ts";
 import { frame, record } from "./codec8-fixture.ts";
 import { ack, identity, login, withPeer } from "./peer.ts";
 
@@ -165,5 +177,249 @@ test("CLI sends only with a private identity file and prints a sanitized receipt
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("expected input failures preserve their category and precedence", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-error-order-"));
+  const config = join(directory, "run.json");
+  const input = {
+    schemaVersion: 1,
+    identityFile: "identities.json",
+    deviceId: "sim-a",
+    target: { transport: "tcp", host: "127.0.0.1", port: -1 },
+    record: { invalid: true },
+  };
+  const messages: string[] = [];
+  const run = () =>
+    runTcp(
+      ["run", "--config", config],
+      (message) => messages.push(message),
+      new AbortController().signal,
+    );
+  try {
+    assert.equal(await run(), 2);
+    assert.deepEqual(messages.splice(0), ["input-unavailable"]);
+    writeFileSync(config, "{");
+    assert.equal(await run(), 2);
+    assert.deepEqual(messages.splice(0), ["invalid-json"]);
+    writeFileSync(config, JSON.stringify(input));
+    assert.equal(await run(), 2);
+    assert.deepEqual(messages.splice(0), ["invalid-record"]);
+    writeFileSync(config, JSON.stringify({ ...input, record }));
+    assert.equal(await run(), 2);
+    assert.deepEqual(messages.splice(0), ["invalid-identity-file"]);
+    writeFileSync(
+      join(directory, "identities.json"),
+      JSON.stringify({ "sim-a": identity }),
+      { mode: 0o600 },
+    );
+    assert.equal(await run(), 2);
+    assert.deepEqual(messages.splice(0), ["invalid-session"]);
+    writeFileSync(
+      config,
+      JSON.stringify({
+        ...input,
+        target: { ...input.target, host: "localhost" },
+      }),
+    );
+    assert.equal(await run(), 2);
+    assert.deepEqual(messages.splice(0), ["invalid-run-config"]);
+    writeFileSync(
+      config,
+      JSON.stringify({
+        ...input,
+        target: { transport: "tcp", ...defaultTarget },
+        record,
+      }),
+    );
+    const cancelled = new AbortController();
+    cancelled.abort();
+    assert.equal(
+      await runTcp(
+        ["run", "--config", config],
+        (message) => messages.push(message),
+        cancelled.signal,
+      ),
+      130,
+    );
+    assert.deepEqual(messages.splice(0), ["cancelled"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("unexpected input defects cannot impersonate an expected category", () => {
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-defect-"));
+  const input = join(directory, "record.json");
+  writeFileSync(input, JSON.stringify(record));
+  const messages: string[] = [];
+  try {
+    const fault = mock.method(JSON, "parse", () => {
+      throw new Error("invalid-record");
+    });
+    try {
+      assert.equal(
+        runCli(["validate", "--config", input], (message) =>
+          messages.push(message),
+        ),
+        1,
+      );
+      assert.deepEqual(messages, ["internal-error"]);
+    } finally {
+      fault.mock.restore();
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("unexpected transport defects produce only a redacted internal failure", () => {
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-transport-defect-"));
+  try {
+    const config = join(directory, "run.json");
+    const hook = join(directory, "fault.mjs");
+    writeFileSync(
+      config,
+      JSON.stringify({
+        schemaVersion: 1,
+        record,
+        identityFile: "identities.json",
+        deviceId: "sim-a",
+      }),
+    );
+    writeFileSync(
+      join(directory, "identities.json"),
+      JSON.stringify({ "sim-a": identity }),
+      { mode: 0o600 },
+    );
+    writeFileSync(
+      hook,
+      `import {registerHooks} from "node:module";
+registerHooks({load(url,context,next) {
+  if (url.endsWith("/src/transport/tcp.ts")) return {
+    format:"module",shortCircuit:true,source:'export async function sendBatches() { throw new Error("private-transport-defect"); }'
+  };
+  return next(url,context);
+}});
+`,
+    );
+    const result = spawnSync(
+      process.execPath,
+      ["--import", hook, "src/cli.ts", "run", "--config", config],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "internal-error\n");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("typed run configurations agree with the closed schema and documented defaults", () => {
+  const valid = new Ajv2020({ ownProperties: true }).compile<RunConfig>(
+    runConfigSchema,
+  );
+  const minimal = {
+    schemaVersion: 1,
+    record,
+    deviceId: "sim-a",
+    identityFile: "identities.json",
+  } satisfies RunConfig;
+  const full = {
+    ...minimal,
+    target: { transport: "tcp", ...defaultTarget },
+    retry: { ackDeadlineMs: 100, totalDeadlineMs: 1, maxAttempts: 1 },
+    connectionPolicy: "persistent-compliant-peer",
+  } satisfies RunConfig;
+  assert.equal(valid(minimal), true);
+  assert.equal(valid(full), true);
+  const emptyRetry = { ...minimal, retry: {} } satisfies RunConfig;
+  assert.equal(valid(emptyRetry), true);
+  const explicitDefaults = {
+    ...minimal,
+    retry: {
+      ackDeadlineMs: sessionDefaults.ackDeadlineMs,
+      totalDeadlineMs: sessionDefaults.totalDeadlineMs,
+      maxAttempts: sessionDefaults.maxAttempts,
+    },
+    connectionPolicy: sessionDefaults.connectionPolicy,
+  } satisfies RunConfig;
+  assert.equal(valid(explicitDefaults), true);
+  assert.deepEqual(
+    [...runConfigSchema.required].sort(),
+    Object.keys(minimal).sort(),
+  );
+  assert.deepEqual(
+    Object.keys(runConfigSchema.properties).sort(),
+    Object.keys(full).sort(),
+  );
+  assert.deepEqual(
+    [...runConfigSchema.properties.target.required].sort(),
+    Object.keys(full.target).sort(),
+  );
+  for (const patch of [
+    { schemaVersion: 2 },
+    { target: { ...full.target, transport: "udp" } },
+    { target: { host: "127.0.0.1", port: 55027 } },
+    { retry: { ...full.retry, maxAttempts: "1" } },
+    { retry: null },
+  ])
+    assert.equal(valid({ ...minimal, ...patch }), false);
+
+  const limits = sessionLimits({ ...defaultTarget, identity, now: () => 0 });
+  assert.equal(limits.ackDeadlineMs, sessionDefaults.ackDeadlineMs);
+  assert.equal(limits.maxAttempts, sessionDefaults.maxAttempts);
+  assert.equal(limits.connectionPolicy, sessionDefaults.connectionPolicy);
+  assert.equal(limits.remaining(), sessionDefaults.totalDeadlineMs);
+  const readme = readFileSync("README.md", "utf8");
+  const sample = /```json\n([\s\S]*?)\n```/u.exec(readme)?.[1];
+  assert.ok(sample);
+  const documentedTarget = readme.match(
+    /Optional `(\{[^\n]+?\})` \(default\)/u,
+  )?.[1];
+  assert.ok(documentedTarget);
+  assert.deepEqual(JSON.parse(documentedTarget), {
+    transport: "tcp",
+    ...defaultTarget,
+  });
+  assert.equal(valid({ ...minimal, record: JSON.parse(sample) }), true);
+  assert.equal(encodeCodec8(JSON.parse(sample)).length, 45);
+});
+
+test("unexpected identity parsing defects remain internal failures", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-identity-defect-"));
+  try {
+    const input = {
+      schemaVersion: 1,
+      record,
+      deviceId: "sim-a",
+      identityFile: "identities.json",
+    };
+    const config = join(directory, "run.json");
+    writeFileSync(config, JSON.stringify(input));
+    writeFileSync(join(directory, "identities.json"), "{}", { mode: 0o600 });
+    let calls = 0;
+    const fault = mock.method(JSON, "parse", () => {
+      if (++calls === 1) return input;
+      throw new Error("private-identity-defect");
+    });
+    const messages: string[] = [];
+    try {
+      assert.equal(
+        await runTcp(
+          ["run", "--config", config],
+          (message) => messages.push(message),
+          new AbortController().signal,
+        ),
+        1,
+      );
+      assert.deepEqual(messages, ["internal-error"]);
+    } finally {
+      fault.mock.restore();
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
