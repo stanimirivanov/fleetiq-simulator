@@ -151,11 +151,23 @@ The sensor uses the existing TypeScript parser (no new dependency). It compares
 actual comments for TypeScript/Biome/ESLint and coverage suppressions, identifies
 static node:test declarations/options and context skip controls, and compares
 test-name multisets across changed suites. Moving an unchanged declaration is
-allowed; deleting or renaming it requires review. Existing suppression comments
-may move within a file; new or edited suppression comments fail. Coverage group
+allowed. A literal title rename is allowed only when the complete remaining
+printed call (target, type arguments, options and callback) is unchanged.
+Declarations are consumed once; duplicate titles/shapes cannot hide deletion.
+Ambiguous combinations may conservatively fail. Retained-name edits keep their
+existing behavior and still require review of assertion quality. Existing
+suppression comments may move within a file; new or edited suppression comments fail. Coverage group
 names and numeric line/branch floors must remain readable and cannot decrease.
-Existing package scripts cannot change, except prepending this floor check to
-`check`. Added tests and ordinary implementation changes remain allowed.
+Existing package scripts must remain unchanged, except the original floor
+bootstrap and narrowly additive suffixes such as ` && pnpm check:extra`. The
+complete baseline command must be preserved byte-for-byte and use only plain
+`pnpm`/`node`/`tsc`/`biome`/`eslint` command chains joined by ` && `. Each appended
+script must have a lowercase namespaced name (for example `check:extra`) and
+an own nonempty definition in package.json. Namespacing avoids pnpm built-ins.
+Arguments, comments, redirections, substitutions, alternate operators and
+unknown scripts are rejected. Shell fixtures prove that a failed baseline
+short-circuits the suffix and that added failures still fail the chain.
+Added tests and ordinary implementation changes remain allowed.
 
 This is a conservative structural sensor, not a proof of test semantics: it
 cannot prove assertions remain meaningful, resolve arbitrary dynamic test
@@ -173,8 +185,11 @@ workflow itself, parser dependency and other harness changes still require revie
 
 `.github/CODEOWNERS` assigns verification inputs, tests, guides and ownership
 policy to the repository owner. Whole-file ownership protects `package.json`
-scripts because CODEOWNERS cannot select individual JSON fields. For intentional
-blocked maintenance, retain the original protection where possible; otherwise
+scripts because CODEOWNERS cannot select individual JSON fields. Structural
+maintenance allowances establish mechanical preservation, not human approval.
+They do not authorize suppressions, assertion changes accompanying a rename,
+deletions or lower thresholds; external code-owner review remains required.
+For intentional blocked maintenance, retain the original protection where possible; otherwise
 record the exact diff, rationale, replacement evidence and explicit maintainer
 approval in a dedicated policy PR. A narrowly authorized ruleset bypass must be
 recorded externally if needed; there is no in-repository skip flag or self-issued

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -339,5 +340,216 @@ test("floor does not evaluate computed identifiers or expressions", (context) =>
     "tests/example.test.mjs",
     `${original}\nconst skip = "ordinary"; spec("added", { [skip]: true, [(() => { throw new Error("must-not-execute"); })()]: true }, () => {});`,
   );
+  assert.deepEqual(checkFloor(base, root), []);
+});
+
+test("floor permits literal title renames with the complete remaining call unchanged", (context) => {
+  const { root, base, write } = fixture(context);
+  write("tests/example.test.mjs", original.replace('"retained"', '"renamed"'));
+  assert.deepEqual(checkFloor(base, root), []);
+  write("tests/example.test.mjs", original.replace('"retained"', "`renamed`"));
+  assert.deepEqual(checkFloor(base, root), []);
+});
+
+test("floor preserves rename duplicate counts and rejects altered callbacks or options", (context) => {
+  const { root, write, git } = fixture(context);
+  const source =
+    'import { test as spec } from "node:test"; spec("first", { timeout: 100 }, () => { assert.equal(1, 1); }); spec("second", { timeout: 100 }, () => { assert.equal(1, 1); });';
+  write("tests/example.test.mjs", source);
+  git(["add", "."]);
+  git([
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "-m",
+    "assertions",
+  ]);
+  const base = git(["rev-parse", "HEAD"]);
+  write("tests/example.test.mjs", source.replace('"first"', '"renamed"'));
+  assert.deepEqual(checkFloor(base, root), []);
+  for (const changed of [
+    source.replace('"first"', '"renamed"').replace("assert.equal(1, 1);", ""),
+    source
+      .replace('"first"', '"renamed"')
+      .replace("timeout: 100", "timeout: 200"),
+    source
+      .replace('"first"', '"renamed"')
+      .replace("assert.equal(1, 1);", "assert.equal(1, 2);"),
+    source.slice(0, source.indexOf(' spec("second"')),
+  ]) {
+    write("tests/example.test.mjs", changed);
+    assert.ok(checkFloor(base, root).includes("test-removed"));
+  }
+});
+
+test("floor permits additive namespaced verification commands but rejects shell bypasses", (context) => {
+  const { root, base, write } = fixture(context);
+  const scripts = {
+    test: "node --test",
+    "check:extra": "node extra.mjs",
+    "lint:extra": "node lint.mjs",
+  };
+  for (const command of [
+    "pnpm test && pnpm check:extra",
+    "pnpm test && pnpm check:extra && pnpm lint:extra",
+  ]) {
+    write(
+      "package.json",
+      JSON.stringify({ scripts: { ...scripts, check: command } }),
+    );
+    assert.deepEqual(checkFloor(base, root), [], command);
+  }
+  for (const command of [
+    "pnpm test || pnpm check:extra",
+    "pnpm test; pnpm check:extra",
+    "pnpm test && pnpm check:extra || true",
+    "pnpm test && pnpm check:extra # ignored",
+    "pnpm test && pnpm check:extra\necho success",
+    "pnpm test && pnpm check:extra &",
+    "pnpm test && pnpm check:missing",
+    "pnpm test && pnpm check:extra --ignore-failure",
+    "pnpm test && pnpm install",
+    "pnpm test && pnpm check:extra$(echo injected)",
+    "echo success && pnpm check:extra",
+  ]) {
+    write(
+      "package.json",
+      JSON.stringify({ scripts: { ...scripts, check: command } }),
+    );
+    assert.ok(
+      checkFloor(base, root).includes("verification-script-changed"),
+      command,
+    );
+  }
+});
+
+test("additive gates preserve real shell failure and short-circuit behavior", (context) => {
+  const { root, base, write } = fixture(context);
+  const command = "pnpm test && pnpm check:extra";
+  write(
+    "package.json",
+    JSON.stringify({
+      scripts: {
+        check: command,
+        test: "node --test",
+        "check:extra": "node extra.mjs",
+      },
+    }),
+  );
+  assert.deepEqual(checkFloor(base, root), []);
+  write(
+    "bin/pnpm",
+    `#!/bin/sh
+printf '%s\\n' "$1" >> "$FLEETIQ_CALL_LOG"
+case "$1" in
+  test) exit "$FLEETIQ_BASE_EXIT" ;;
+  check:extra) exit "$FLEETIQ_ADDED_EXIT" ;;
+  *) exit 99 ;;
+esac
+`,
+  );
+  chmodSync(join(root, "bin/pnpm"), 0o700);
+  for (const [baseline, added, expected, calls] of [
+    [7, 0, 7, "test\n"],
+    [0, 9, 9, "test\ncheck:extra\n"],
+    [0, 0, 0, "test\ncheck:extra\n"],
+  ]) {
+    const log = join(root, "calls");
+    write("calls", "");
+    const result = spawnSync("/bin/sh", ["-c", command], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        PATH: `${join(root, "bin")}:${process.env.PATH}`,
+        FLEETIQ_CALL_LOG: log,
+        FLEETIQ_BASE_EXIT: String(baseline),
+        FLEETIQ_ADDED_EXIT: String(added),
+      },
+    });
+    assert.equal(result.status, expected, result.stderr);
+    assert.equal(readFileSync(log, "utf8"), calls);
+  }
+});
+
+test("floor does not collapse duplicate titles or duplicate shapes during maintenance", (context) => {
+  const { root, write, git } = fixture(context);
+  write(
+    "tests/example.test.mjs",
+    `${original}\nspec("retained", () => { assert.ok(true); });`,
+  );
+  git(["add", "."]);
+  git([
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "-m",
+    "duplicates",
+  ]);
+  const base = git(["rev-parse", "HEAD"]);
+  write(
+    "tests/example.test.mjs",
+    `${original.replace('"retained"', '"renamed"')}\nspec("retained", () => { assert.ok(true); });`,
+  );
+  assert.deepEqual(checkFloor(base, root), []);
+  write("tests/example.test.mjs", original);
+  assert.ok(checkFloor(base, root).includes("test-removed"));
+});
+
+test("floor rejects additive suffixes on ambiguous baseline shell syntax", (context) => {
+  const { root, write, git } = fixture(context);
+  for (const command of [
+    "pnpm test # comment",
+    "exit 0",
+    "pnpm test; echo done",
+  ]) {
+    write(
+      "package.json",
+      JSON.stringify({ scripts: { check: command, test: "node --test" } }),
+    );
+    git(["add", "."]);
+    git([
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "-m",
+      "legacy command",
+    ]);
+    const base = git(["rev-parse", "HEAD"]);
+    write(
+      "package.json",
+      JSON.stringify({
+        scripts: {
+          check: `${command} && pnpm check:extra`,
+          test: "node --test",
+          "check:extra": "node extra.mjs",
+        },
+      }),
+    );
+    assert.ok(checkFloor(base, root).includes("verification-script-changed"));
+  }
+});
+
+test("floor keeps literal rename allowances separate from dynamic titles and changed targets", (context) => {
+  const { root, base, write } = fixture(context);
+  write(
+    "tests/example.test.mjs",
+    'import { test } from "node:test"; test("renamed", () => {});',
+  );
+  assert.ok(checkFloor(base, root).includes("test-removed"));
+  write(
+    "tests/example.test.mjs",
+    'import { test as spec } from "node:test"; const title = "renamed"; spec(title, () => {});',
+  );
+  assert.ok(checkFloor(base, root).includes("test-removed"));
+  write("tests/moved.test.mjs", original);
+  rmSync(join(root, "tests/example.test.mjs"));
   assert.deepEqual(checkFloor(base, root), []);
 });
