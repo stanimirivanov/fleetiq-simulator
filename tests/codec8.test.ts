@@ -1,41 +1,7 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import {
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
-import { run as runCli } from "../src/cli.ts";
 import { crc16Arc, encodeCodec8 } from "../src/wire/codec8.ts";
-
-const record = {
-  schemaVersion: 1,
-  timestampMs: String(0x16b40d8ea30),
-  priority: 1,
-  longitudeE7: 0,
-  latitudeE7: 0,
-  altitude: 0,
-  angle: 0,
-  satellites: 0,
-  speed: 0,
-  eventId: 1,
-  io: [
-    { id: 21, hex: "03" },
-    { id: 1, hex: "01" },
-    { id: 66, hex: "5e0f" },
-    { id: 241, hex: "0000601a" },
-    { id: 78, hex: "0000000000000000" },
-  ],
-};
-
-// Teltonika Codec 8 over TCP, first worked example.
-const frame =
-  "000000000000003608010000016b40d8ea30010000000000000000000000000000000105021503010101425e0f01f10000601a014e0000000000000000010000c7cf";
+import { frame, record } from "./codec8-fixture.ts";
 
 test("encodes Teltonika's literal frame and CRC-16/ARC check value", () => {
   assert.equal(encodeCodec8(record).toString("hex"), frame);
@@ -89,61 +55,4 @@ test("rejects invalid ranges, unknown keys, widths and counts", () => {
   }
   const full = Array.from({ length: 64 }, (_, id) => ({ id, hex: "aabbccdd" }));
   assert.equal(encodeCodec8({ ...record, io: full })[35], 64);
-});
-
-test("CLI reads bounded files, redacts failures and writes private bytes once", () => {
-  const directory = mkdtempSync(join(tmpdir(), "fleetiq-codec8-"));
-  try {
-    const input = join(directory, "private-input");
-    const output = join(directory, "private-output");
-    const run = (...args: string[]) => {
-      const messages: string[] = [];
-      const status = runCli(args, (category) => messages.push(category));
-      return {
-        status,
-        stderr: messages.map((message) => `${message}\n`).join(""),
-      };
-    };
-
-    assert.equal(run("encode", input).stderr, "usage\n");
-    assert.equal(
-      run("validate", "--config", input).stderr,
-      "input-unavailable\n",
-    );
-    assert.equal(
-      run("validate", "--config", directory).stderr,
-      "invalid-input-file\n",
-    );
-    for (const [contents, error] of [
-      ["{private-value", "invalid-json"],
-      [Buffer.from([0xff]), "invalid-json"],
-      [JSON.stringify({ ...record, imei: "private-value" }), "invalid-record"],
-      [" ".repeat(16 * 1024 + 1), "input-too-large"],
-    ] as const) {
-      writeFileSync(input, contents);
-      const result = run("validate", "--config", input);
-      assert.equal(result.status, 2);
-      assert.equal(result.stderr, `${error}\n`);
-    }
-    writeFileSync(input, JSON.stringify(record));
-    const validated = spawnSync(
-      process.execPath,
-      ["src/cli.ts", "validate", "--config", input],
-      { encoding: "utf8" },
-    );
-    assert.equal(validated.status, 0);
-    assert.equal(validated.stdout, "");
-    assert.equal(validated.stderr, "");
-    const encoded = run("encode", "--config", input, "--output", output);
-    assert.equal(encoded.status, 0);
-    assert.equal(readFileSync(output).toString("hex"), frame);
-    assert.equal(statSync(output).mode & 0o777, 0o600);
-    assert.equal(
-      run("encode", "--config", input, "--output", output).stderr,
-      "output-unavailable\n",
-    );
-    assert.equal(readFileSync(output).toString("hex"), frame);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 });

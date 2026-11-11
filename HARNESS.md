@@ -26,6 +26,7 @@ tests/
 tools/
   AGENTS.md                verification authoring
   architecture.mjs         AST import gate
+  coverage.mjs             suite/source inventory and native coverage groups
   secrets.mjs              pinned secret scanner
 .githooks/pre-commit       opt-in local sensor
 .github/workflows/ci.yml   required-check candidate for main
@@ -57,7 +58,11 @@ tool modules. The build emits only production code. Biome enforces named exports
 and TypeScript rejects syntax that requires runtime transformation.
 
 The canonical gate executes lint, type checking, architecture and canaries, build,
-coverage tests, secret scanning and the dependency audit. The live advisory
+coverage tests, secret scanning and the dependency audit. `pnpm test:coverage`
+registers each suite once in disjoint groups. It checks the source inventory
+against structured Node coverage events so unloaded files cannot disappear
+from a group's denominator. Each group has its own fresh test process and
+thresholds. A failing group stops verification. The live advisory
 database changes over time, so record the run outcome rather than treating it
 as a permanent clearance. The install commands and scanner checksum are in CI.
 
