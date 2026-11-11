@@ -11,10 +11,11 @@ import { pathToFileURL } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import {
   type ConnectionPolicy,
+  type DeliveryReceipt,
   defaultTarget,
   SessionError,
 } from "./session/state.ts";
-import { encodeCodec8, RecordError } from "./wire/codec8.ts";
+import { Codec8Frame, encodeCodec8, RecordError } from "./wire/codec8.ts";
 
 const maxInput = 16 * 1024;
 
@@ -227,6 +228,7 @@ export async function runTcp(
   args: string[],
   report: (category: string) => void,
   signal: AbortSignal,
+  acknowledge: (receipt: DeliveryReceipt) => void = () => {},
 ): Promise<number> {
   const [, flag, path] = args;
   if (flag !== "--config" || !path || args.length !== 3) {
@@ -238,7 +240,7 @@ export async function runTcp(
     if (!validRunConfig(config)) {
       throw new InputError("invalid-run-config");
     }
-    const frame = encodeCodec8(config.record);
+    const frame = Codec8Frame.fromRecord(config.record);
     let identity: string;
     try {
       const identities = readInput(
@@ -268,7 +270,7 @@ export async function runTcp(
     }
 
     const { sendBatches } = await import("./transport/tcp.ts");
-    await sendBatches([frame], {
+    const receipt = await sendBatches([frame], {
       host: config.target?.host ?? defaultTarget.host,
       port: config.target?.port ?? defaultTarget.port,
       ...config.retry,
@@ -276,6 +278,7 @@ export async function runTcp(
       identity,
       signal,
     });
+    acknowledge(receipt);
     return 0;
   } catch (error) {
     return reportFailure(error, report);
@@ -294,10 +297,15 @@ if (
     process.once("SIGINT", cancel);
     process.once("SIGTERM", cancel);
     try {
-      process.exitCode = await runTcp(args, report, controller.signal);
-      if (process.exitCode === 0) {
-        process.stdout.write('{"status":"acknowledged","recordCount":1}\n');
-      }
+      process.exitCode = await runTcp(
+        args,
+        report,
+        controller.signal,
+        (receipt) =>
+          process.stdout.write(
+            `${JSON.stringify({ status: receipt.status, recordCount: receipt.recordCount })}\n`,
+          ),
+      );
     } finally {
       process.off("SIGINT", cancel);
       process.off("SIGTERM", cancel);

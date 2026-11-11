@@ -11,3 +11,8 @@ boundaries explicit.
 Verify byte changes against literal independent vectors and malformed or boundary
 inputs. Avoid computing the expected bytes with the production encoder or the
 same CRC helper. `node --test tests/codec8.test.ts` is the focused gate.
+
+Wire owns the AVL payload, TCP envelope, CRC and declared record count.
+`Codec8Frame` retains a private validated byte snapshot and exposes copies.
+Transport consumes that snapshot and its count together. Keep raw Buffer
+admission and frame validation in wire when changing future codecs.

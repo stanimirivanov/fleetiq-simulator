@@ -41,10 +41,13 @@ test("waits for all four ACK bytes and accepts a compliant persistent peer", {
       }
     },
     async (port) => {
-      await sendBatches([frame, frame], {
-        ...options(port),
-        connectionPolicy: "persistent-compliant-peer",
-      });
+      assert.deepEqual(
+        await sendBatches([frame, frame], {
+          ...options(port),
+          connectionPolicy: "persistent-compliant-peer",
+        }),
+        { status: "acknowledged", recordCount: 2 },
+      );
     },
   );
 });
@@ -225,6 +228,54 @@ test("persistent reconnect retries only the unacknowledged batch", {
         connectionPolicy: "persistent-compliant-peer",
       });
       assert.equal(attempts, 2);
+    },
+  );
+});
+
+test("a peer accepting a frame before a lost ACK can receive it twice but the receipt counts it once", {
+  timeout: 3000,
+}, async () => {
+  let remoteAcceptances = 0;
+  await withPeer(
+    async (socket, attempt) => {
+      const read = await login(socket);
+      socket.write(Buffer.from([1]));
+      assert.deepEqual(await read(frame.length), frame);
+      remoteAcceptances++;
+      if (attempt === 1) socket.end();
+      else socket.end(ack);
+    },
+    async (port) => {
+      const receipt = await sendBatches([frame], {
+        ...options(port),
+        maxAttempts: 2,
+      });
+      assert.deepEqual(receipt, { status: "acknowledged", recordCount: 1 });
+      assert.equal(remoteAcceptances, 2);
+    },
+  );
+});
+
+test("a later unacknowledged batch rejects without a partial success receipt", {
+  timeout: 3000,
+}, async () => {
+  let completed = false;
+  await withPeer(
+    async (socket, attempt) => {
+      const read = await login(socket);
+      socket.write(Buffer.from([1]));
+      assert.deepEqual(await read(frame.length), frame);
+      if (attempt === 1) socket.end(ack);
+      else socket.end();
+    },
+    async (port) => {
+      await assert.rejects(
+        sendBatches([frame, frame], options(port)).then(() => {
+          completed = true;
+        }),
+        /^Error: connection-closed$/,
+      );
+      assert.equal(completed, false);
     },
   );
 });

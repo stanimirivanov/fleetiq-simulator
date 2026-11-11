@@ -37,7 +37,7 @@ tools/
 | CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, Ajv, Node fs/path/url. Runtime transport loads are confined to the network command |
 | Session state | Validated settings, monotonic run budget, error categories | Session and wire modules, without external imports |
 | TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, Node net, Effect |
-| Wire | Validated record and deterministic bytes | Wire and Ajv |
+| Wire | Validated record, AVL payload, TCP envelope and immutable frame metadata | Wire and Ajv |
 
 The TypeScript AST gate checks imports, re-exports, import types, literal dynamic
 imports, unsupported CommonJS imports and cycles. New ownership requires a
