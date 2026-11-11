@@ -10,3 +10,8 @@ captures out of tests and output.
 A sensor needs a passing control and a meaningful violation. Distinguish a
 missing or broken tool from a clean result. Do not skip tests or weaken
 assertions to reach a pass.
+
+Register every new test suite and production source in `tools/coverage.mjs`.
+The canonical coverage gate executes disjoint wire, session/transport, CLI and
+tooling groups. Keep CLI acceptance cases in `cli.test.ts` and shared data or
+peer helpers in files without a `.test` suffix.

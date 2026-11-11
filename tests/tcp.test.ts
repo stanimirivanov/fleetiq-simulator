@@ -6,15 +6,13 @@ import { setTimeout as delay } from "node:timers/promises";
 import { sessionLimits } from "../src/session/state.ts";
 import { sendBatches } from "../src/transport/tcp.ts";
 import { encodeCodec8 } from "../src/wire/codec8.ts";
-import { reader, withPeer } from "./peer.ts";
+import { ack, identity, login, withPeer } from "./peer.ts";
 
 // Published Teltonika TCP Codec 8 example, one record.
 const frame = Buffer.from(
   "000000000000002808010000016b40d9ad80010000000000000000000000000000000103021503010101425e100000010000f22a",
   "hex",
 );
-const ack = Buffer.from([0, 0, 0, 1]);
-const identity = "01234".repeat(3);
 
 function options(port: number) {
   return {
@@ -25,13 +23,6 @@ function options(port: number) {
     totalDeadlineMs: 2_000,
     maxAttempts: 1,
   } as const;
-}
-
-async function login(socket: Socket) {
-  const read = reader(socket);
-  assert.deepEqual(await read(2), Buffer.from([0, 15]));
-  assert.equal((await read(15)).toString("ascii"), identity);
-  return read;
 }
 
 test("waits for all four ACK bytes and accepts a compliant persistent peer", {
@@ -162,103 +153,6 @@ test("cancellation and the monotonic run budget bound a silent peer", {
         );
       },
     );
-  }
-});
-
-test("CLI sends only with a private identity file and prints a sanitized receipt", {
-  timeout: 3000,
-}, async () => {
-  const { execFile } = await import("node:child_process");
-  const { mkdtemp, rm, writeFile, chmod } = await import("node:fs/promises");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
-  const directory = await mkdtemp(join(tmpdir(), "fleetiq-tcp-"));
-  try {
-    const config = join(directory, "config.json");
-    const identities = join(directory, "identities.json");
-    const run = () =>
-      new Promise<{ code: number; stdout: string; stderr: string }>(
-        (resolve) => {
-          execFile(
-            process.execPath,
-            ["src/cli.ts", "run", "--config", config],
-            { timeout: 2000 },
-            (error, stdout, stderr) => {
-              resolve({ code: Number(error?.code ?? 0), stdout, stderr });
-            },
-          );
-        },
-      );
-    await withPeer(
-      async (socket, attempt) => {
-        const read = await login(socket);
-        if (attempt === 2) {
-          socket.end(Buffer.from([0]));
-          return;
-        }
-        assert.equal(attempt, 1);
-        socket.write(Buffer.from([1]));
-        const received = await read(45);
-        assert.equal(received[8], 8);
-        assert.equal(received[9], 1);
-        socket.end(ack);
-      },
-      async (port) => {
-        const inputs = {
-          schemaVersion: 1,
-          identityFile: "identities.json",
-          deviceId: "sim-a",
-          target: { transport: "tcp", host: "127.0.0.1", port },
-          record: {
-            schemaVersion: 1,
-            timestampMs: "0",
-            priority: 0,
-            longitudeE7: 0,
-            latitudeE7: 0,
-            altitude: 0,
-            angle: 0,
-            satellites: 0,
-            speed: 0,
-            eventId: 0,
-            io: [],
-          },
-        };
-        for (const invalid of [
-          { ...inputs, identityFile: "../identities.json" },
-          { ...inputs, imei: identity },
-          { ...inputs, target: { ...inputs.target, host: "localhost" } },
-        ]) {
-          await writeFile(config, JSON.stringify(invalid));
-          assert.deepEqual(await run(), {
-            code: 2,
-            stdout: "",
-            stderr: "invalid-run-config\n",
-          });
-        }
-        await writeFile(config, JSON.stringify(inputs));
-        await writeFile(identities, JSON.stringify({ "sim-a": identity }), {
-          mode: 0o644,
-        });
-        assert.deepEqual(await run(), {
-          code: 2,
-          stdout: "",
-          stderr: "invalid-identity-file\n",
-        });
-        await chmod(identities, 0o600);
-        assert.deepEqual(await run(), {
-          code: 0,
-          stdout: '{"status":"acknowledged","recordCount":1}\n',
-          stderr: "",
-        });
-        assert.deepEqual(await run(), {
-          code: 3,
-          stdout: "",
-          stderr: "login-refused\n",
-        });
-      },
-    );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
   }
 });
 

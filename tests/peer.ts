@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, type Socket } from "node:net";
 
@@ -46,4 +47,14 @@ export function reader(socket: Socket) {
     buffered = buffered.subarray(size);
     return result;
   };
+}
+
+export const ack = Buffer.from([0, 0, 0, 1]);
+export const identity = "01234".repeat(3);
+
+export async function login(socket: Socket) {
+  const read = reader(socket);
+  assert.deepEqual(await read(2), Buffer.from([0, 15]));
+  assert.equal((await read(15)).toString("ascii"), identity);
+  return read;
 }
