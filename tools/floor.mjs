@@ -30,6 +30,26 @@ function removed(before, after) {
   });
 }
 
+/**
+ * Gives direct and computed literal keys the same decoded spelling. Computed
+ * identifiers and expressions stay unresolved; inspecting a fixture never runs it.
+ *
+ * @param {ts.Node | undefined} node
+ * @returns {string | undefined}
+ */
+function staticPropertyName(node) {
+  if (!node) return undefined;
+  if (ts.isComputedPropertyName(node) || ts.isElementAccessExpression(node)) {
+    const key = ts.isComputedPropertyName(node)
+      ? node.expression
+      : node.argumentExpression;
+    return key && ts.isStringLiteralLike(key) ? key.text : undefined;
+  }
+  return ts.isIdentifier(node) || ts.isStringLiteralLike(node)
+    ? node.text
+    : undefined;
+}
+
 /** Reads real comments and node:test declarations, excluding fixture strings.
  * Names identify tests across moves; renames deliberately require review.
  * @param {string} text @param {string} file
@@ -81,8 +101,15 @@ function inspect(text, file) {
     if (/\.test\.(?:ts|mjs|js)$/u.test(file) && ts.isCallExpression(node)) {
       let target = node.expression;
       const methods = [];
-      while (ts.isPropertyAccessExpression(target)) {
-        methods.unshift(target.name.text);
+      while (
+        ts.isPropertyAccessExpression(target) ||
+        ts.isElementAccessExpression(target)
+      ) {
+        const property = staticPropertyName(
+          ts.isPropertyAccessExpression(target) ? target.name : target,
+        );
+        if (property === undefined) break;
+        methods.unshift(property);
         target = target.expression;
       }
       const name = ts.isIdentifier(target) ? target.text : "";
@@ -117,7 +144,7 @@ function inspect(text, file) {
               (property) =>
                 ts.isPropertyAssignment(property) &&
                 ["skip", "todo", "only"].includes(
-                  property.name.getText(source).replaceAll(/["']/gu, ""),
+                  staticPropertyName(property.name) ?? "",
                 ) &&
                 property.initializer.kind !== ts.SyntaxKind.FalseKeyword,
             );
