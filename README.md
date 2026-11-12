@@ -103,3 +103,42 @@ A receipt counts each locally acknowledged batch once, even if it was sent
 several times. After a connection failure without an ACK, remote acceptance
 is unknown. Exhausted runs emit a failure and no success receipt. The receiver
 may already have accepted some or all transmitted records.
+
+## Restricted simulator image
+
+`pnpm image:qualify` builds and qualifies a local Linux AMD64 image. It needs
+Docker, native `tar`, Gitleaks 8.30.1 and Trivy 0.76.2 on PATH, plus network access
+to the pinned base images and current vulnerability database. The PR image
+workflow installs checksum-pinned scanners and runs the same command; it does
+not publish an image. Keep `pnpm check` and `pnpm security` as the source gates.
+
+The gate runs validate, encode and bounded loopback TCP login/frame/ACK through
+the compiled CLI with a read-only root, UID/GID 65532, no capabilities,
+no-new-privileges, no external network, and bounded memory/CPU/processes. It scans
+HIGH/CRITICAL vulnerabilities and secrets, scans all saved layers for known
+secret patterns and supported identity JSON/IMEI assignments, and requires a deleted-layer
+identity canary to fail. Scanner errors fail qualification. No hardware or
+installed-product acceptance is implied by this synthetic peer.
+
+A successful gate writes `.verification/image.json`: Git revision, actual source
+fingerprint, clean/dirty status, local image ID, platform and completed checks.
+The sanitized receipt is also printed in CI logs. The source fingerprint hashes sorted Git-visible paths and their length-delimited
+bytes. Ignored files never enter the frozen build context; symlinks and private
+artifact names are rejected. Dirty candidates are explicitly identified and do
+not claim to be committed source. A local image ID is not a registry digest.
+The JavaScript-only runtime removes dependency documentation comments, TypeScript
+sources/types and source maps using the existing TypeScript parser. Executable
+strings, package metadata and licenses remain; real secrets in code still fail
+scanning. No new JavaScript dependency is added. The Dockerfile pins both upstream
+image digests; dependencies use the frozen
+lockfile. Future publication and immutable registry-reference qualification
+require a separate maintainer action.
+
+For operator runs, keep configuration, identities and outputs outside the checkout
+and image. Mount private inputs read-only; give identity files mode 0600 owned by
+the container's effective UID (the CLI verifies both). For bind mounts owned by a
+nonroot host user, explicitly set Docker `--user` to that user's UID:GID. Retain
+`--read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64
+--memory 256m --cpus 1`; mount only a bounded output directory for `encode`.
+`run` needs network access to the explicitly authorized TCP target. The image's
+entrypoint accepts the existing `validate`, `encode` and `run` CLI arguments.

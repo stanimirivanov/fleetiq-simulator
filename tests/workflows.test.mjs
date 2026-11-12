@@ -27,6 +27,7 @@ const pnpmInstall = installCommand(manifest.packageManager);
 /** @type {[string, string][]} */
 const workflowJobs = [
   ["ci", "check"],
+  ["image", "qualify"],
   ["security-scheduled", "security"],
   ["platform-decoder", "qualify"],
 ];
@@ -378,7 +379,7 @@ function verifyVersionPins(document, metadata, scannerVersion) {
     assert.deepEqual(install[0], {
       run: installCommand(metadata.packageManager),
     });
-    if (String(entry.key) !== "qualify") {
+    if (document.get("name") !== "Platform decoder qualification") {
       const scanners = values.filter(
         (step) => step.name === "Install checksum-pinned Gitleaks",
       );
@@ -396,7 +397,12 @@ function verifyVersionPins(document, metadata, scannerVersion) {
 }
 
 test("all workflow runtime and package-manager pins follow package metadata", () => {
-  for (const name of ["ci", "security-scheduled", "platform-decoder"]) {
+  for (const name of [
+    "ci",
+    "security-scheduled",
+    "platform-decoder",
+    "image",
+  ]) {
     const document = workflow(name);
     verifyVersionPins(document, manifest, gitleaksVersion);
     for (const metadata of [
@@ -412,7 +418,7 @@ test("all workflow runtime and package-manager pins follow package metadata", ()
 
 test("scanner workflow release and archive pins follow one scanner definition", () => {
   assert.equal(typeof gitleaksVersion, "string");
-  for (const name of ["ci", "security-scheduled"]) {
+  for (const name of ["ci", "security-scheduled", "image"]) {
     const document = workflow(name);
     verifyVersionPins(document, manifest, gitleaksVersion);
     assert.throws(() => verifyVersionPins(document, manifest, "0.0.0"), {

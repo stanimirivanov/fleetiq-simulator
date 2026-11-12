@@ -1,0 +1,12 @@
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!pnpm-lock.yaml
+!tsconfig.json
+!src
+!src/**/
+!src/**/*.ts
+!tools/
+!tools/image-deps.mjs
+!LICENSE
