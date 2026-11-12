@@ -142,3 +142,24 @@ nonroot host user, explicitly set Docker `--user` to that user's UID:GID. Retain
 --memory 256m --cpus 1`; mount only a bounded output directory for `encode`.
 `run` needs network access to the explicitly authorized TCP target. The image's
 entrypoint accepts the existing `validate`, `encode` and `run` CLI arguments.
+
+## Publish the qualified image
+
+After merging reviewed source, a maintainer can dispatch **Publish immutable
+simulator image** on `main`. Leave `source_revision` blank to use the exact main
+SHA at dispatch, or provide that same full SHA. A different branch/revision,
+main advancing during qualification, dirty source or a commit without a merged
+PR fails admission. The workflow runs `pnpm check` and `pnpm image:qualify`
+before authenticating or pushing to GHCR.
+
+Publication uses `GITHUB_TOKEN` with job-scoped package write permission and an
+isolated temporary Docker configuration. It pushes a unique source/run/attempt
+tag, pulls the registry digest and verifies that the image ID, source labels,
+fingerprint and platform match qualification. The run summary reports the
+immutable `ghcr.io/stanimirivanov/fleetiq-simulator@sha256:...` reference, source
+SHA and fingerprint for the deployment lock. `.verification/publication.json`
+is sanitized local evidence; failed attempts remove any stale publication receipt.
+A failed read-back is not a qualified publication, even if a push allocated bytes.
+No publication runs on PRs or automatically after merge, and no environment is
+promoted. The first hosted publication and GHCR package access remain maintainer
+qualification actions after this workflow merges.

@@ -28,6 +28,7 @@ const pnpmInstall = installCommand(manifest.packageManager);
 const workflowJobs = [
   ["ci", "check"],
   ["image", "qualify"],
+  ["publish", "publish"],
   ["security-scheduled", "security"],
   ["platform-decoder", "qualify"],
 ];
@@ -399,6 +400,7 @@ test("all workflow runtime and package-manager pins follow package metadata", ()
     "security-scheduled",
     "platform-decoder",
     "image",
+    "publish",
   ]) {
     const document = workflow(name);
     verifyVersionPins(document, manifest, gitleaksVersion);
@@ -415,7 +417,7 @@ test("all workflow runtime and package-manager pins follow package metadata", ()
 
 test("scanner workflow release and archive pins follow one scanner definition", () => {
   assert.equal(typeof gitleaksVersion, "string");
-  for (const name of ["ci", "security-scheduled", "image"]) {
+  for (const name of ["ci", "security-scheduled", "image", "publish"]) {
     const document = workflow(name);
     verifyVersionPins(document, manifest, gitleaksVersion);
     assert.throws(() => verifyVersionPins(document, manifest, "0.0.0"), {
