@@ -376,3 +376,20 @@ not a published registry artifact, and is removed before each qualification so
 failure cannot leave an earlier acceptance receipt behind. Review upstream image
 pins and dependency fixes when live scanning finds an advisory; do not suppress
 findings or change thresholds to get a pass.
+
+## Explicit image publication
+
+`.github/workflows/publish.yml` is a separate manual-only main workflow, using
+major-version GitHub Actions. It runs the unchanged canonical and real image gates
+before `tools/image-publish.mjs` can authenticate. Admission checks the current
+GitHub main pointer, dispatch SHA, merged PR association and clean Git/source
+fingerprint. The main pointer is checked again immediately before publication.
+Only the publication job receives package write permission; PR jobs stay read-only.
+
+Publication tests use temporary Git repositories and native fake registry tools
+for complete success/failure paths. They assert immutable read-back identity,
+refusal of wrong/dirty/incomplete inputs, stdin-only token handling, child-token
+removal, isolated auth cleanup, redacted tool errors and stale-receipt removal.
+These fixtures do not claim real GHCR publication. A maintainer must merge the
+workflow, dispatch it and review the successful digest/source summary before
+SIM-PR6 can pin that artifact. No dispatch or registry publication is automatic.

@@ -8,7 +8,11 @@ and print source locations for static failures. Preserve redaction on scans.
 When changing architecture policy, ship a matching positive and negative
 fixture. Document approved changes to quality checks in the PR. Keep CI
 read-only for repository contents. PR verification and the scheduled/manual
-security workflow are the approved triggers; do not add privileged PR execution.
+security workflow are the approved verification triggers. Image publication is
+manual-only on reviewed main; grant packages:write only to that publication job.
+Authenticate only after source/image qualification, using disposable registry
+authentication.
+Do not add privileged PR execution.
 Preserve `Simulator verification / check`. Prefer major-version references for
 GitHub Actions (for example, `actions/checkout@v7`).
 Use an exact commit only when specifically required; update workflow controls when
