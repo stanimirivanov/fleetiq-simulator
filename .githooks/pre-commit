@@ -12,4 +12,5 @@ if [ -n "$untracked" ]; then
   echo 'pre-commit: stage or isolate untracked files before verification.' >&2
   exit 1
 fi
+pnpm floor
 exec pnpm check:fast

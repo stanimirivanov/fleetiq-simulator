@@ -1,2 +1,8 @@
 node_modules/
 dist/
+
+# Operator inputs and captures belong outside the checkout, regardless of case.
+[pP][rR][iI][vV][aA][tT][eE]-*
+*.[bB][iI][nN]
+*.[pP][cC][aA][pP]
+*.[pP][cC][aA][pP][nN][gG]

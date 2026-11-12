@@ -316,6 +316,18 @@ function floors(text) {
   return result;
 }
 
+/**
+ * Applies the private-input policy to every component so force-adding an ignored
+ * directory cannot hide its contents. Classification never inspects file bytes.
+ *
+ * @param {string} path
+ */
+function privatePath(path) {
+  return path
+    .split("/")
+    .some((component) => /^private-|\.(?:bin|pcap|pcapng)$/iu.test(component));
+}
+
 /** Checks the complete candidate worktree against an immutable ancestor commit.
  * Staged, committed and untracked code are included; missing history fails closed.
  * @param {string} base @param {string} [root]
@@ -332,6 +344,8 @@ export function checkFloor(base, root = ".") {
   } catch {
     throw new Error("baseline-not-ancestor");
   }
+  if (git(root, ["ls-files", "--cached", "-z"]).split("\0").some(privatePath))
+    return ["private-path-tracked"];
   const baseFiles = new Set(
     git(root, ["ls-tree", "-r", "--name-only", "-z", base]).split("\0"),
   );
@@ -429,7 +443,9 @@ if (
     if (problems.length) {
       for (const problem of problems)
         process.stderr.write(
-          `verification-floor ${problem}; Restore the baseline protection; inspect the diff privately and request maintainer review for intentional changes.\n`,
+          problem === "private-path-tracked"
+            ? "verification-floor private-path-tracked; Remove private inputs/captures from the index without deleting their working copies; keep them outside the checkout and use textual synthetic fixtures.\n"
+            : `verification-floor ${problem}; Restore the baseline protection; inspect the diff privately and request maintainer review for intentional changes.\n`,
         );
       process.exitCode = 1;
     } else process.stdout.write(`Verification floor passed against ${base}.\n`);
