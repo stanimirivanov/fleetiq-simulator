@@ -3,6 +3,9 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { reviewedPath } from "./diagnostic-location.mjs";
 
+// Canonical scanner release; workflow tests bind both download version fields.
+export const gitleaksVersion = "8.30.1";
+
 const config = fileURLToPath(new URL("../.gitleaks.toml", import.meta.url));
 const scanArgs = {
   worktree: ["dir"],
@@ -108,7 +111,7 @@ if (
   if (
     version.error ||
     version.status !== 0 ||
-    version.stdout.trim() !== "8.30.1"
+    version.stdout.trim() !== gitleaksVersion
   ) {
     process.stderr.write(
       "secret-scanner-version-error; Install the pinned Gitleaks version.\n",

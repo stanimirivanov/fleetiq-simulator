@@ -1,12 +1,27 @@
 # Simulator coding harness
 
 Start at [AGENTS.md](AGENTS.md). Use this guide for gate failures, harness changes
-or rollout. The project is a Node 24.18.0 TypeScript ESM CLI built with TypeScript
-5.9.3 and pnpm 12.5.1. It uses native Buffer and TCP, Ajv 8.20.0 for schema
-validation and Effect 4.0.5 for TCP scope, interruption and retry. Node's built-in
-test runner executes TypeScript with native type stripping and collects coverage.
-Biome 2.5.15 checks style and Gitleaks 8.30.1 checks secrets. The repository
+or rollout. The project is a strict TypeScript ESM CLI using native Buffer and
+TCP, Ajv for schema validation and Effect for TCP scope, interruption and retry.
+Node's built-in test runner executes TypeScript with native type stripping and
+collects coverage; Biome checks style and Gitleaks checks secrets. The repository
 contains an offline encoder and a one-record loopback sender.
+
+| Fact | Canonical definition |
+| --- | --- |
+| Node, pnpm and dependency versions | [package.json](package.json) |
+| Gitleaks release | Exported `gitleaksVersion` in [tools/secrets.mjs](tools/secrets.mjs) |
+| Linux scanner artifact checksum | [CI installation step](.github/workflows/ci.yml) |
+| Written quality floors | [CONSTRAINTS.md](CONSTRAINTS.md) |
+| Coverage groups and enforcement | [tools/coverage.mjs](tools/coverage.mjs) |
+
+Workflow tests compare Node/pnpm installation pins with package metadata across
+all three workflows and both scanner download-version fields with the scanner
+constant. Explicit workflow pins remain reviewed configuration, not generated
+files. Pin updates must keep those fields consistent and review the artifact
+checksum; parity tests do not silently select a new version or a new checksum.
+Observe actual local tool versions before citing results, as the
+[failure log](docs/harness-failures.md) explains. Linux is the supported runtime.
 
 ```text
 AGENTS.md                  issue intake, PEV, and context routing
@@ -114,7 +129,9 @@ checks the worktree, index and history of **all locally available refs**
 (its pinned default is `git log -p -U0 --full-history --all --diff-filter=tuxdb`).
 This includes main and merged parents, plus other branches/tags fetched by
 checkout. It does not prove coverage of server-only or unreachable/deleted refs,
-forks or private operator files. See the [pinned scanner implementation](https://github.com/gitleaks/gitleaks/blob/v8.30.1/sources/git.go). The clean scheduled index has
+forks or private operator files. The history-scope analysis was checked against
+[this upstream snapshot](https://github.com/gitleaks/gitleaks/blob/v8.30.1/sources/git.go);
+recheck it when updating the canonical scanner release. The clean scheduled index has
 no staged edits. Dependencies are installed from the frozen lockfile and audited
 against the live registry with the unchanged high/critical failure threshold.
 No findings are suppressed or cached as a permanent clearance; scanner or

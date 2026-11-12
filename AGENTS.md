@@ -1,9 +1,10 @@
 # FleetIQ simulator
 
 Start with the issue and the nearest guide below. The simulator uses strict
-TypeScript ESM on Node 24.18.0 and pnpm 12.5.1. Keep source compatible with Node's
-native TypeScript stripping. Use native Buffer for wire bytes, Ajv for closed
-input schemas and Effect 4 for TCP resource lifetime.
+TypeScript ESM; runtime, package-manager and dependency pins are in
+[package.json](package.json). Keep source compatible with Node's native
+TypeScript stripping. Use native Buffer for wire bytes, Ajv for closed input
+schemas and Effect for TCP resource lifetime.
 
 | Touching | Read next |
 | --- | --- |
