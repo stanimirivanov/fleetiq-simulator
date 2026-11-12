@@ -1,4 +1,4 @@
-# Verification authority; enable required code-owner review in the main ruleset.
+# Maintainer responsibility and review routing; no independent-approval prerequisite.
 /.github/ @stanimirivanov
 /.githooks/ @stanimirivanov
 /tools/ @stanimirivanov
@@ -6,6 +6,7 @@
 /**/AGENTS.md @stanimirivanov
 /CONSTRAINTS.md @stanimirivanov
 /HARNESS.md @stanimirivanov
+/docs/harness-failures.md @stanimirivanov
 /package.json @stanimirivanov
 /pnpm-lock.yaml @stanimirivanov
 /tsconfig*.json @stanimirivanov
