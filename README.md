@@ -6,8 +6,11 @@ For repository boundaries, agent instructions and verification commands, see
 The simulator validates a versioned Codec 8 record offline or sends it to an
 authorized loopback TCP listener using a private device identity file.
 
-Use Node 24.18.0, pnpm 12.5.1 and Gitleaks 8.30.1 on Linux. The CI workflow
-contains the checksum for the Linux x64 scanner release.
+Linux is the supported runtime. Use the Node and pnpm pins in
+[package.json](package.json) and the scanner release defined in
+[tools/secrets.mjs](tools/secrets.mjs). The
+[CI workflow](.github/workflows/ci.yml) contains the Linux x64 scanner checksum.
+Confirm actual tool versions against those definitions before verification.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -44,9 +47,11 @@ up to 64 entries of the form `{"id": 1, "hex": "00"}`; values are exactly 1, 2,
 each group. It derives wire counts, length and CRC. See the
 [Teltonika Codec 8 TCP examples](https://wiki.teltonika-gps.com/view/Codec#Codec_8).
 
-`pnpm check` enforces Biome, strict types, build, tests, wire coverage (90%
-lines and 85% branches), CLI line coverage (80%), a redacted secret scan and
-current dependency advisories (high and critical findings fail the gate).
+`pnpm check` enforces the verification floor, style, strict types, architecture,
+build, tests, coverage, redacted secret scanning and current dependency advisories.
+The quality thresholds are defined in [CONSTRAINTS.md](CONSTRAINTS.md).
+[tools/coverage.mjs](tools/coverage.mjs) enforces them in separate wire,
+session/transport and CLI groups, with exact suite/source inventories.
 
 ## Send one record over TCP
 

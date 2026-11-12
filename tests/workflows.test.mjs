@@ -5,11 +5,31 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { isMap, isSeq, parseDocument } from "yaml";
+import { gitleaksVersion } from "../tools/secrets.mjs";
 
 const checkout = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const setupNode = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1";
-const pnpmInstall =
-  "npm install --global pnpm@12.5.1 --allow-scripts=pnpm@12.5.1 --strict-allow-scripts";
+
+/** @typedef {{engines: {node: string}, packageManager: string}} ToolMetadata */
+
+/** @type {ToolMetadata} */
+const manifest = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+);
+
+/** Preserves the reviewed installation command while varying only its pin. @param {string} manager */
+function installCommand(manager) {
+  return `npm install --global ${manager} --allow-scripts=${manager} --strict-allow-scripts`;
+}
+
+const pnpmInstall = installCommand(manifest.packageManager);
+
+/** @type {[string, string][]} */
+const workflowJobs = [
+  ["ci", "check"],
+  ["security-scheduled", "security"],
+  ["platform-decoder", "qualify"],
+];
 
 /** Reads real YAML so comments and quoted scalars cannot impersonate policy. @param {string} name */
 function workflow(name) {
@@ -29,6 +49,7 @@ function workflow(name) {
  * @param {boolean} scheduled
  */
 function verify(document, scheduled) {
+  verifyVersionPins(document, manifest, gitleaksVersion);
   assert.deepEqual(document.toJS().permissions, { contents: "read" });
   const jobs = document.get("jobs");
   assert.ok(isMap(jobs));
@@ -77,7 +98,7 @@ function verify(document, scheduled) {
   });
   assert.deepEqual(values[1], {
     uses: setupNode,
-    with: { "node-version": "24.18.0" },
+    with: { "node-version": manifest.engines.node },
   });
   assert.deepEqual(values[2], { run: pnpmInstall });
   assert.deepEqual(values[3], { run: "pnpm install --frozen-lockfile" });
@@ -86,10 +107,6 @@ function verify(document, scheduled) {
     /551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb/,
   );
   assert.match(values[4].run, /sha256sum --check/);
-  assert.match(
-    values[4].run,
-    /v8\.30\.1\/gitleaks_8\.30\.1_linux_x64\.tar\.gz/,
-  );
   if (scheduled) {
     assert.equal(values[5].shell, "bash");
     assert.match(
@@ -269,6 +286,7 @@ test("verification inputs and the ownership policy have a maintainer owner", () 
 
 test("platform decoder workflow uses the reviewed source pin and exact Rust toolchain", () => {
   const document = workflow("platform-decoder");
+  verifyVersionPins(document, manifest, gitleaksVersion);
   const value = document.toJS();
   const pin = JSON.parse(
     readFileSync(
@@ -288,7 +306,7 @@ test("platform decoder workflow uses the reviewed source pin and exact Rust tool
   });
   assert.deepEqual(steps[1], {
     uses: setupNode,
-    with: { "node-version": "24.18.0" },
+    with: { "node-version": manifest.engines.node },
   });
   assert.deepEqual(steps[2], { run: pnpmInstall });
   assert.deepEqual(steps[3], { run: "pnpm install --frozen-lockfile" });
@@ -317,5 +335,139 @@ test("platform decoder workflow uses the reviewed source pin and exact Rust tool
   for (const step of steps) {
     assert.equal(step.if, undefined);
     assert.equal(step["continue-on-error"], undefined);
+  }
+});
+
+/**
+ * Checks executable workflow pins against package metadata and scanner policy.
+ * It checks both release-path and archive versions, without accepting duplicates.
+ * @param {import("yaml").Document} document
+ * @param {ToolMetadata} metadata
+ * @param {string} scannerVersion
+ */
+function verifyVersionPins(document, metadata, scannerVersion) {
+  assert.match(metadata.engines.node, /^\d+\.\d+\.\d+$/u);
+  assert.match(metadata.packageManager, /^pnpm@\d+\.\d+\.\d+$/u);
+  assert.match(scannerVersion, /^\d+\.\d+\.\d+$/u);
+  const jobs = document.get("jobs");
+  assert.ok(isMap(jobs));
+  for (const entry of jobs.items) {
+    assert.ok(isMap(entry.value));
+    const steps = entry.value.get("steps");
+    assert.ok(isSeq(steps));
+    const values = steps.items.map((step) => {
+      assert.ok(isMap(step));
+      return step.toJSON();
+    });
+    const setup = values.filter(
+      (step) =>
+        typeof step.uses === "string" &&
+        step.uses.startsWith("actions/setup-node@"),
+    );
+    assert.equal(setup.length, 1);
+    assert.deepEqual(setup[0], {
+      uses: setupNode,
+      with: { "node-version": metadata.engines.node },
+    });
+    const install = values.filter(
+      (step) =>
+        typeof step.run === "string" &&
+        step.run.startsWith("npm install --global pnpm@"),
+    );
+    assert.equal(install.length, 1);
+    assert.deepEqual(install[0], {
+      run: installCommand(metadata.packageManager),
+    });
+    if (String(entry.key) !== "qualify") {
+      const scanners = values.filter(
+        (step) => step.name === "Install checksum-pinned Gitleaks",
+      );
+      assert.equal(scanners.length, 1);
+      const urls = [
+        ...scanners[0].run.matchAll(
+          /https:\/\/github\.com\/gitleaks\/gitleaks\/releases\/download\/v([0-9.]+)\/gitleaks_([0-9.]+)_linux_x64\.tar\.gz/gu,
+        ),
+      ];
+      assert.equal(urls.length, 1);
+      assert.equal(urls[0]?.[1], scannerVersion);
+      assert.equal(urls[0]?.[2], scannerVersion);
+    }
+  }
+}
+
+test("all workflow runtime and package-manager pins follow package metadata", () => {
+  for (const name of ["ci", "security-scheduled", "platform-decoder"]) {
+    const document = workflow(name);
+    verifyVersionPins(document, manifest, gitleaksVersion);
+    for (const metadata of [
+      { ...manifest, engines: { ...manifest.engines, node: "0.0.0" } },
+      { ...manifest, packageManager: "pnpm@0.0.0" },
+    ])
+      assert.throws(
+        () => verifyVersionPins(document, metadata, gitleaksVersion),
+        { name: "AssertionError" },
+      );
+  }
+});
+
+test("scanner workflow release and archive pins follow one scanner definition", () => {
+  assert.equal(typeof gitleaksVersion, "string");
+  for (const name of ["ci", "security-scheduled"]) {
+    const document = workflow(name);
+    verifyVersionPins(document, manifest, gitleaksVersion);
+    assert.throws(() => verifyVersionPins(document, manifest, "0.0.0"), {
+      name: "AssertionError",
+    });
+  }
+});
+
+test("pin parity rejects independently changed workflow fields and scanner URLs", () => {
+  for (const [name, job] of workflowJobs) {
+    for (const field of ["node", "pnpm", "allow-scripts"]) {
+      const document = workflow(name);
+      if (field === "node")
+        document.setIn(
+          ["jobs", job, "steps", 1, "with", "node-version"],
+          "0.0.0",
+        );
+      else {
+        const path = ["jobs", job, "steps", 2, "run"];
+        const command = document.getIn(path);
+        assert.equal(typeof command, "string");
+        const original =
+          field === "pnpm"
+            ? `--global ${manifest.packageManager}`
+            : `--allow-scripts=${manifest.packageManager}`;
+        const changed =
+          field === "pnpm"
+            ? "--global pnpm@0.0.0"
+            : "--allow-scripts=pnpm@0.0.0";
+        document.setIn(path, String(command).replace(original, changed));
+      }
+      assert.throws(
+        () => verifyVersionPins(document, manifest, gitleaksVersion),
+        { name: "AssertionError" },
+      );
+    }
+  }
+  for (const [name, job] of workflowJobs.filter(
+    ([name]) => name !== "platform-decoder",
+  )) {
+    for (const field of ["release", "archive", "duplicate"]) {
+      const document = workflow(name);
+      const path = ["jobs", job, "steps", 4, "run"];
+      const command = String(document.getIn(path));
+      const changed =
+        field === "release"
+          ? command.replace(`/v${gitleaksVersion}/`, "/v0.0.0/")
+          : field === "archive"
+            ? command.replace(`gitleaks_${gitleaksVersion}_`, "gitleaks_0.0.0_")
+            : `${command}\n# https://github.com/gitleaks/gitleaks/releases/download/v${gitleaksVersion}/gitleaks_${gitleaksVersion}_linux_x64.tar.gz`;
+      document.setIn(path, changed);
+      assert.throws(
+        () => verifyVersionPins(document, manifest, gitleaksVersion),
+        { name: "AssertionError" },
+      );
+    }
   }
 });
