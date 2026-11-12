@@ -141,6 +141,8 @@ test("PR image gate is unconditional, read-only and uses the local qualification
     "timeout-minutes",
   ]);
   assert.equal(job["timeout-minutes"], 20);
+  assert.equal(job.steps[0].uses, "actions/checkout@v7");
+  assert.equal(job.steps[1].uses, "actions/setup-node@v7");
   assert.equal(job.steps.at(-1).run, "pnpm image:qualify");
   for (const step of job.steps) {
     assert.equal(step.if, undefined);

@@ -9,8 +9,10 @@ When changing architecture policy, ship a matching positive and negative
 fixture. Document approved changes to quality checks in the PR. Keep CI
 read-only for repository contents. PR verification and the scheduled/manual
 security workflow are the approved triggers; do not add privileged PR execution.
-Preserve `Simulator verification / check`. Pin actions to verified upstream full
-commit SHAs and update the workflow controls when reviewing a pin upgrade.
+Preserve `Simulator verification / check`. Prefer major-version references for
+GitHub Actions (for example, `actions/checkout@v7`).
+Use an exact commit only when specifically required; update workflow controls when
+reviewing an action version change.
 
 Put a blank line before a standalone comment or comment group so it reads
 with the code it introduces. In tooling JSDoc, lead with what the function

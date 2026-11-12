@@ -119,7 +119,9 @@ and on manual dispatch from `main`. The PR job remains
 `Simulator verification / check` and still runs the complete canonical gate,
 including both secret and live advisory scans. Neither job has write permission.
 Checkout and setup-node use upstream-verified full commit SHAs (v7 at adoption);
-review the upstream commit and workflow controls when updating pins.
+new or updated workflows prefer major-version action references. The image
+workflow uses `actions/checkout@v7` and `actions/setup-node@v7`. Review workflow
+controls when changing action versions.
 
 The scheduled checkout explicitly fetches `refs/heads/main` with full history.
 Before scanning, it rejects shallow history or a HEAD different from fetched

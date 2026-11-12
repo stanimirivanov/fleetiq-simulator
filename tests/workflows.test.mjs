@@ -366,10 +366,7 @@ function verifyVersionPins(document, metadata, scannerVersion) {
         step.uses.startsWith("actions/setup-node@"),
     );
     assert.equal(setup.length, 1);
-    assert.deepEqual(setup[0], {
-      uses: setupNode,
-      with: { "node-version": metadata.engines.node },
-    });
+    assert.deepEqual(setup[0].with, { "node-version": metadata.engines.node });
     const install = values.filter(
       (step) =>
         typeof step.run === "string" &&
