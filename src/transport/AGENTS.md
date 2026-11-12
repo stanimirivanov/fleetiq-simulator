@@ -6,7 +6,10 @@ Advance the cursor only after an exact count ACK. Strict mode retires the
 socket after success. Persistent mode requires one ACK per batch.
 
 Use session policy and wire encoding without introducing a dependency back
-into the CLI. Keep loopback admission, deadlines and output redaction intact.
+into the CLI. Keep loopback defaults, deadlines and output redaction intact. Only the exact
+`tcp-ingestion` Compose name may use DNS. Resolve IPv4 once per attempt, require
+all answers to be loopback or RFC 1918 private, and connect to the admitted numeric
+address. DNS belongs in transport; never admit arbitrary names or public targets.
 Verify transport behavior against the independent peer with
 `node --test tests/tcp.test.ts`.
 

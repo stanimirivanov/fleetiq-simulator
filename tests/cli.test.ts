@@ -518,3 +518,25 @@ registerHooks({load(url,context,next) {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("CLI schema admits the precise Compose name while keeping arbitrary destinations rejected", () => {
+  const validate = new Ajv2020().compile(runConfigSchema);
+  const input = {
+    schemaVersion: 1,
+    identityFile: "identities.json",
+    deviceId: "demo",
+    record: {},
+    target: { transport: "tcp", host: "tcp-ingestion", port: 55027 },
+  };
+  assert.equal(validate(input), true);
+  for (const host of [
+    "example.com",
+    "tcp-ingestion.example.com",
+    "8.8.8.8",
+    "localhost",
+  ])
+    assert.equal(
+      validate({ ...input, target: { ...input.target, host } }),
+      false,
+    );
+});

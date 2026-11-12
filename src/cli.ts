@@ -203,7 +203,7 @@ export const runConfigSchema = {
       required: ["transport", "host", "port"],
       properties: {
         transport: { const: "tcp" },
-        host: { enum: ["127.0.0.1", "::1"] },
+        host: { enum: ["127.0.0.1", "::1", "tcp-ingestion"] },
         port: integer,
       } satisfies Record<keyof NonNullable<RunConfig["target"]>, object>,
     },

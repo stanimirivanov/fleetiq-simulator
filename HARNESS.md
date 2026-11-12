@@ -5,7 +5,9 @@ or rollout. The project is a strict TypeScript ESM CLI using native Buffer and
 TCP, Ajv for schema validation and Effect for TCP scope, interruption and retry.
 Node's built-in test runner executes TypeScript with native type stripping and
 collects coverage; Biome checks style and Gitleaks checks secrets. The repository
-contains an offline encoder and a one-record loopback sender.
+contains an offline encoder and a bounded local sender. The exact
+`tcp-ingestion` Compose target additionally admits validated private IPv4 DNS;
+see the target contract in README.md.
 
 | Fact | Canonical definition |
 | --- | --- |

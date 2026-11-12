@@ -4,7 +4,7 @@ For repository boundaries, agent instructions and verification commands, see
 [AGENTS.md](AGENTS.md) and the [coding harness](HARNESS.md).
 
 The simulator validates a versioned Codec 8 record offline or sends it to an
-authorized loopback TCP listener using a private device identity file.
+authorized local TCP listener using a private device identity file.
 
 Linux is the supported runtime. Use the Node and pnpm pins in
 [package.json](package.json) and the scanner release defined in
@@ -64,9 +64,17 @@ local listener. The version 1 run config contains these fields:
 | `record` | The complete version 1 record shown above |
 | `deviceId` | A logical name, such as `sim-a` |
 | `identityFile` | A filename beside the config, containing a JSON object mapping that one logical name to its 15-digit device identity |
-| `target` | Optional `{"transport":"tcp","host":"127.0.0.1","port":55027}` (default). Only literal `127.0.0.1` and `::1` are accepted |
+| `target` | Optional `{"transport":"tcp","host":"127.0.0.1","port":55027}` (default). Literal `127.0.0.1`, `::1`, or the exact Compose service name `tcp-ingestion` are accepted |
 | `retry` | Optional overrides for `ackDeadlineMs`, `maxAttempts`, and `totalDeadlineMs`. Defaults are defined in [session policy](src/session/state.ts) |
 | `connectionPolicy` | Optional `single-batch` (default) or `persistent-compliant-peer` |
+
+For the isolated deployment demo, `tcp-ingestion` resolves through IPv4 DNS once
+per connection attempt. Every returned address must be loopback or RFC 1918
+private space; public, link-local, mixed and empty answers fail closed. The socket
+uses the validated numeric address without a second lookup. Arbitrary hostnames
+and non-loopback literal addresses remain rejected. The default stays loopback.
+DNS admission restricts destinations; it does not authenticate the peer. Use the
+approved isolated Compose network and authorize the target before sending.
 
 Keep both files in an owned private directory. The identity file must be owned
 by the current user, have no group or other permissions, and be a regular
