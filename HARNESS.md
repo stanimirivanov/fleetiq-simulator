@@ -30,6 +30,8 @@ tools/
   secrets.mjs              pinned secret scanner
 .githooks/pre-commit       opt-in local sensor
 .github/workflows/ci.yml   required-check candidate for main
+.github/pull_request_template.md manual review checklist
+docs/harness-failures.md   sanitized root causes, controls and evidence
 ```
 
 | Owner | State or effects owned | Allowed production dependencies |
@@ -210,7 +212,7 @@ policy to the repository owner. Whole-file ownership protects `package.json`
 scripts because CODEOWNERS cannot select individual JSON fields. Structural
 maintenance allowances establish mechanical preservation, not human approval.
 They do not authorize suppressions, assertion changes accompanying a rename,
-deletions or lower thresholds; external code-owner review remains required.
+deletions or lower thresholds; manual maintainer review remains required.
 For intentional blocked maintenance, retain the original protection where possible; otherwise
 record the exact diff, rationale, replacement evidence and explicit maintainer
 approval in a dedicated policy PR. A narrowly authorized ruleset bypass must be
@@ -219,18 +221,38 @@ allowlist. Do not weaken the checker merely to get an ordinary PR green.
 
 Maintainer setup and qualification (not performed by this PR):
 
-1. On `main`, require PRs, the actual `Simulator verification / check` status
-   context, code-owner approval, dismissal of stale approvals, and approval of
-   the most recent push by an eligible reviewer. Restrict bypass actors; do not
-   give the coding agent routine bypass authority. Add another eligible owner
-   when the sole owner authors a PR, since authors cannot approve their own PRs.
-2. After merge, verify GitHub accepts the CODEOWNERS entries and requests the
-   correct reviewer on a policy PR. Use deliberate failing fixtures to verify a
-   failed status and a missing owner approval both prevent merging. Verify that
-   a later push invalidates the required approval. Record URLs/results privately.
-3. Until these checks are observed, report repository sensors as implemented
-   and external merge enforcement as **unqualified**. Do not claim CODEOWNERS
-   alone blocks merges or configure merge-queue requirements without a trigger.
+1. On `main`, require PRs and the actual GitHub Actions check identities for
+   `Simulator verification / check` and `Platform decoder qualification / qualify`.
+   Preserve deletion/force-push protection and restrict bypass actors. Do not
+   give the coding agent routine bypass authority.
+2. Verify GitHub accepts CODEOWNERS and records the intended maintainer ownership.
+   A controlled qualification PR with a failing required check must be unable
+   to merge. Record sanitized run URLs/results; close deliberate failures without
+   merging them. Do not configure merge-queue requirements without a trigger.
+3. Until those checks are observed, external merge enforcement is **unqualified**.
+   CODEOWNERS and checklist completion alone do not block merges or prove that
+   a person reviewed the change.
+
+The maintainer dropped the mandatory additional-reviewer/independent-approval
+prerequisite on 2026-11-12. MA1 is retired, not pending. CODEOWNERS continues to
+record maintainer responsibility and review routing. There is no requirement to
+add another account, obtain a formal independent approval, dismiss stale
+approvals or require approval of the latest push as a condition of this policy.
+This decision does not change required CI gates, quality thresholds or the
+instruction that coding agents stop after opening the PR and never infer merge
+authorization. No external settings were changed to implement this decision.
+
+Use the [PR checklist](.github/pull_request_template.md) for manual review of
+architecture/state ownership, assertion and oracle quality, comments, privacy,
+compatibility and verification evidence. Record material review concerns rather
+than treating checked boxes as approval. Policy changes need their exact scope,
+baseline, rationale and preservation/replacement evidence recorded in the PR.
+
+After a meaningful harness failure, add or update the
+[failure log](docs/harness-failures.md). Record the symptom, root cause, corrective
+control and evidence, and distinguish a merged fix from hosted or external
+qualification. Use reviewed references and synthetic reproductions; keep raw
+incident material and diagnostic metadata private. Do not log every routine run.
 
 References: [GitHub code ownership](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
 and [ruleset review/status requirements](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets).

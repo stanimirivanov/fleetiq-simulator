@@ -252,6 +252,7 @@ test("verification inputs and the ownership policy have a maintainer owner", () 
     "/**/AGENTS.md",
     "/CONSTRAINTS.md",
     "/HARNESS.md",
+    "/docs/harness-failures.md",
     "/package.json",
     "/pnpm-lock.yaml",
     "/tsconfig*.json",
