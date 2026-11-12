@@ -119,7 +119,9 @@ and on manual dispatch from `main`. The PR job remains
 `Simulator verification / check` and still runs the complete canonical gate,
 including both secret and live advisory scans. Neither job has write permission.
 Checkout and setup-node use upstream-verified full commit SHAs (v7 at adoption);
-review the upstream commit and workflow controls when updating pins.
+new or updated workflows prefer major-version action references. The image
+workflow uses `actions/checkout@v7` and `actions/setup-node@v7`. Review workflow
+controls when changing action versions.
 
 The scheduled checkout explicitly fetches `refs/heads/main` with full history.
 Before scanning, it rejects shallow history or a HEAD different from fetched
@@ -346,3 +348,31 @@ before claiming merge enforcement. This PR does not configure rulesets or claim
 hosted/physical-device/installed-product qualification. The separately run
 `cargo test --locked -p fleetiq-teltonika` remains a supporting package gate,
 not a substitute for feeding simulator output to the pinned decoder.
+
+## Image qualification (SIM-PR5)
+
+`pnpm image:qualify` is the separate Docker-dependent image gate; it does not
+change `pnpm check`, its coverage groups or the required source check. Tooling
+unit tests cover metadata/source binding, nonroot/platform constraints, scanner
+failures, private build inputs, workflow authority and pin parity. The real gate
+adds restricted CLI execution, a bounded independent TCP peer, image vulnerability
+and secret scans, and a deleted-layer identity canary. The runtime base is Debian 13; the Node binary remains the exact repository pin.
+See the [official distroless images](https://github.com/GoogleContainerTools/distroless)
+for upstream variants. Runtime fixtures are
+synthetic, generated outside the checkout and removed after qualification.
+
+Use the pinned scanner versions and official archive checksums in
+`.github/workflows/image.yml`. Scanner output remains private; diagnostics give
+stable categories. `image-tool-failed` means install/check the named executable
+or inspect its output privately; `image-scan-*` and `image-layer-secret` mean
+inspect the affected image privately and fix the finding. Never attach raw
+reports or private inputs. Only the sanitized receipt may be shared.
+
+`Simulator image qualification / qualify` is an additional main-ruleset candidate.
+A maintainer must observe the hosted status and configure the external ruleset
+before claiming it blocks merges. Image publication is deliberately outside PR
+verification. `.verification/image.json` records a local content-addressed image,
+not a published registry artifact, and is removed before each qualification so
+failure cannot leave an earlier acceptance receipt behind. Review upstream image
+pins and dependency fixes when live scanning finds an advisory; do not suppress
+findings or change thresholds to get a pass.
