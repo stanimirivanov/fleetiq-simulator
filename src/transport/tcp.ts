@@ -1,4 +1,10 @@
-import { createConnection, type Socket } from "node:net";
+import dns, { type LookupAddress } from "node:dns";
+import {
+  createConnection,
+  isIP,
+  type LookupFunction,
+  type Socket,
+} from "node:net";
 import { Cause, Effect, Exit } from "effect";
 import {
   type DeliveryReceipt,
@@ -8,6 +14,48 @@ import {
   sessionLimits,
 } from "../session/state.ts";
 import { Codec8Frame, FrameError } from "../wire/codec8.ts";
+
+type ComposeResolver = (
+  host: string,
+  done: (error: Error | null, addresses?: readonly LookupAddress[]) => void,
+) => void;
+
+/** Pin the named local target to one verified numeric address; never retry DNS inside connect. */
+export function composeLookup(
+  resolve: ComposeResolver = (host, done) =>
+    dns.lookup(host, { family: 4, all: true }, done),
+): LookupFunction {
+  return (host, _options, done) => {
+    if (host !== "tcp-ingestion") {
+      done(new SessionError("invalid-session"), "", 4);
+      return;
+    }
+    resolve(host, (error, addresses) => {
+      const firstAddress = addresses?.[0];
+      if (
+        error ||
+        !firstAddress ||
+        !addresses.every(({ address, family }) => {
+          if (family !== 4 || isIP(address) !== 4) return false;
+          const [first, second] = address.split(".").map(Number);
+          return (
+            first === 127 ||
+            first === 10 ||
+            (first === 172 &&
+              second !== undefined &&
+              second >= 16 &&
+              second <= 31) ||
+            (first === 192 && second === 168)
+          );
+        })
+      ) {
+        done(new SessionError("invalid-session"), "", 4);
+        return;
+      }
+      done(null, firstAddress.address, 4);
+    });
+  };
+}
 
 function readReply(
   socket: Socket,
@@ -109,7 +157,15 @@ function exchange(
 function openSocket({ host, port }: SessionOptions) {
   return Effect.acquireRelease(
     Effect.sync(() => {
-      const address = { host, port, highWaterMark: 64, noDelay: true };
+      const address = {
+        host,
+        port,
+        highWaterMark: 64,
+        noDelay: true,
+        ...(host === "tcp-ingestion"
+          ? { lookup: composeLookup(), family: 4, autoSelectFamily: false }
+          : {}),
+      };
       const socket = createConnection(address);
       // The close event reports transport failure without exposing endpoints.
       socket.on("error", () => {});

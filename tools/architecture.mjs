@@ -67,7 +67,8 @@ function owner(file) {
  * @param {string} name
  */
 function allowedExternal(layer, name) {
-  if (layer === "transport") return name === "node:net" || name === "effect";
+  if (layer === "transport")
+    return ["node:net", "node:dns", "effect"].includes(name);
   if (layer === "wire") return name === "ajv/dist/2020.js";
   return (
     layer === "cli" &&

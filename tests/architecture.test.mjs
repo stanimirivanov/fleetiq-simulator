@@ -161,3 +161,16 @@ test("wire flags ambient capabilities while allowing local shadowing", () => {
     [1, 2, 3, 4].map((line) => `src/wire/codec8.ts:${line} wire-ambient`),
   );
 });
+
+test("DNS resolution belongs only to the transport adapter", () => {
+  assert.deepEqual(
+    checkArchitecture(files({ "transport/tcp.ts": 'import "node:dns";' })),
+    [],
+  );
+  for (const owner of ["cli.ts", "session/state.ts", "wire/codec8.ts"]) {
+    assert.equal(
+      checkArchitecture(files({ [owner]: 'import "node:dns";' })).length,
+      1,
+    );
+  }
+});
