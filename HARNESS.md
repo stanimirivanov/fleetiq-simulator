@@ -53,8 +53,9 @@ docs/harness-failures.md   sanitized root causes, controls and evidence
 
 | Owner | State or effects owned | Allowed production dependencies |
 | --- | --- | --- |
-| CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, scenarios, Ajv, Node fs/path/url. Runtime transport loads are confined to the network command |
-| Session state | Validated settings, monotonic run budget, error categories | Session and wire modules, without external imports |
+| CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, scenarios, storage, Ajv, Node fs/path/url/crypto. Runtime transport loads are confined to the network command |
+| Storage | Private checkpoint IO, atomic replacement and exclusive writer lock | Storage, session, Node fs/crypto/sqlite |
+| Session state | Validated settings, monotonic run budget, error categories | Session/wire modules and Ajv checkpoint validation; filesystem effects stay in storage |
 | TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, Node net, Effect |
 | Scenarios | Virtual route position, last sampled fix and documented model IO | Scenarios, wire and Ajv; no ambient effects |
 | Wire | Validated record, AVL payload, TCP envelope and immutable frame metadata | Wire and Ajv |
@@ -401,3 +402,12 @@ removal, isolated auth cleanup, redacted tool errors and stale-receipt removal.
 These fixtures do not claim real GHCR publication. A maintainer must merge the
 workflow, dispatch it and review the successful digest/source summary before
 SIM-PR6 can pin that artifact. No dispatch or registry publication is automatic.
+
+## Durable spool verification
+
+The storage coverage group retains 90% lines / 85% branches separately from
+session/transport. Actual child-process SIGKILL tests cover enqueue, prepare, ACK
+and before/after rename/directory flush; CLI tests cover uncertain TCP packets,
+cooperative cancellation and exact resume. Image smoke exercises SQLite lock and
+private atomic replacement under the shipped nonroot/read-only constraints.
+See [the recovery contract](docs/offline-recovery.md) for scope and limitations.

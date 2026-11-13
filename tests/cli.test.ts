@@ -83,38 +83,30 @@ test("CLI reads bounded files, redacts failures and writes private bytes once", 
   }
 });
 
-test("CLI sends only with a private identity file and prints a sanitized receipt", {
-  timeout: 3000,
-}, async () => {
+type IdentityScenario =
+  | "parent identity path"
+  | "inline identity"
+  | "unapproved destination"
+  | "public identity file"
+  | "acknowledged receipt"
+  | "login refusal";
+
+/** Exercises one private CLI invocation and its exact output against an independent peer. */
+async function verifyIdentityScenario(scenario: IdentityScenario) {
   const { execFile } = await import("node:child_process");
-  const { mkdtemp, rm, writeFile, chmod } = await import("node:fs/promises");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
+  const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
   const directory = await mkdtemp(join(tmpdir(), "fleetiq-tcp-"));
   try {
     const config = join(directory, "config.json");
-    const identities = join(directory, "identities.json");
-    const run = () =>
-      new Promise<{ code: number; stdout: string; stderr: string }>(
-        (resolve) => {
-          execFile(
-            process.execPath,
-            ["src/cli.ts", "run", "--config", config],
-            { timeout: 2000 },
-            (error, stdout, stderr) => {
-              resolve({ code: Number(error?.code ?? 0), stdout, stderr });
-            },
-          );
-        },
-      );
+    let connections = 0;
     await withPeer(
-      async (socket, attempt) => {
+      async (socket) => {
+        connections++;
         const read = await login(socket);
-        if (attempt === 2) {
+        if (scenario === "login refusal") {
           socket.end(Buffer.from([0]));
           return;
         }
-        assert.equal(attempt, 1);
         socket.write(Buffer.from([1]));
         const received = await read(45);
         assert.equal(received[8], 8);
@@ -124,9 +116,17 @@ test("CLI sends only with a private identity file and prints a sanitized receipt
       async (port) => {
         const inputs = {
           schemaVersion: 1,
-          identityFile: "identities.json",
+          identityFile:
+            scenario === "parent identity path"
+              ? "../identities.json"
+              : "identities.json",
           deviceId: "sim-a",
-          target: { transport: "tcp", host: "127.0.0.1", port },
+          target: {
+            transport: "tcp",
+            host:
+              scenario === "unapproved destination" ? "localhost" : "127.0.0.1",
+            port,
+          },
           record: {
             schemaVersion: 1,
             timestampMs: "0",
@@ -140,45 +140,74 @@ test("CLI sends only with a private identity file and prints a sanitized receipt
             eventId: 0,
             io: [],
           },
+          ...(scenario === "inline identity" ? { imei: identity } : {}),
         };
-        for (const invalid of [
-          { ...inputs, identityFile: "../identities.json" },
-          { ...inputs, imei: identity },
-          { ...inputs, target: { ...inputs.target, host: "localhost" } },
-        ]) {
-          await writeFile(config, JSON.stringify(invalid));
-          assert.deepEqual(await run(), {
-            code: 2,
-            stdout: "",
-            stderr: "invalid-run-config\n",
-          });
-        }
         await writeFile(config, JSON.stringify(inputs));
-        await writeFile(identities, JSON.stringify({ "sim-a": identity }), {
-          mode: 0o644,
+        await writeFile(
+          join(directory, "identities.json"),
+          JSON.stringify({ "sim-a": identity }),
+          {
+            mode: scenario === "public identity file" ? 0o644 : 0o600,
+          },
+        );
+        const result = await new Promise<{
+          code: number;
+          stdout: string;
+          stderr: string;
+        }>((resolve) => {
+          execFile(
+            process.execPath,
+            ["src/cli.ts", "run", "--config", config],
+            { timeout: 2000 },
+            (error, stdout, stderr) => {
+              resolve({ code: Number(error?.code ?? 0), stdout, stderr });
+            },
+          );
         });
-        assert.deepEqual(await run(), {
-          code: 2,
-          stdout: "",
-          stderr: "invalid-identity-file\n",
-        });
-        await chmod(identities, 0o600);
-        assert.deepEqual(await run(), {
-          code: 0,
-          stdout: '{"status":"acknowledged","recordCount":1}\n',
-          stderr: "",
-        });
-        assert.deepEqual(await run(), {
-          code: 3,
-          stdout: "",
-          stderr: "login-refused\n",
-        });
+        const sends =
+          scenario === "acknowledged receipt" || scenario === "login refusal";
+        assert.equal(connections, sends ? 1 : 0);
+        assert.deepEqual(
+          result,
+          scenario === "acknowledged receipt"
+            ? {
+                code: 0,
+                stdout: '{"status":"acknowledged","recordCount":1}\n',
+                stderr: "",
+              }
+            : {
+                code: scenario === "login refusal" ? 3 : 2,
+                stdout: "",
+                stderr: `${scenario === "login refusal" ? "login-refused" : scenario === "public identity file" ? "invalid-identity-file" : "invalid-run-config"}\n`,
+              },
+        );
       },
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+// Each cold CLI process owns a deadline; unrelated invocations must not share one.
+test("CLI sends only with a private identity file and prints a sanitized receipt", {
+  timeout: 3000,
+}, async () => {
+  await verifyIdentityScenario("acknowledged receipt");
 });
+
+for (const scenario of [
+  "parent identity path",
+  "inline identity",
+  "unapproved destination",
+  "public identity file",
+  "login refusal",
+] as const) {
+  test(`CLI private identity boundary: ${scenario}`, {
+    timeout: 3000,
+  }, async () => {
+    await verifyIdentityScenario(scenario);
+  });
+}
 
 test("expected input failures preserve their category and precedence", async () => {
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-error-order-"));
@@ -604,6 +633,200 @@ test("Extended CLI validates, encodes and sends the exact NX frame with one ACK"
         ]);
       },
     );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("durable CLI captures through outage and resumes frozen FIFO work without new captures", {
+  timeout: 10000,
+}, async () => {
+  const { execFile } = await import("node:child_process");
+  const { playbackConfig } = await import("./playback-fixture.ts");
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-recovery-"));
+  let online = false;
+  const received: Buffer[] = [];
+  const launch = (command: string) =>
+    new Promise<{ code: number; stdout: string; stderr: string }>((done) =>
+      execFile(
+        process.execPath,
+        ["src/cli.ts", command, "--config", join(directory, "config.json")],
+        { timeout: 4000 },
+        (error, stdout, stderr) =>
+          done({ code: Number(error?.code ?? 0), stdout, stderr }),
+      ),
+    );
+  try {
+    await withPeer(
+      async (socket) => {
+        const read = await login(socket);
+        if (!online) {
+          socket.destroy();
+          return;
+        }
+        socket.write(Buffer.from([1]));
+        const header = await read(8);
+        const rest = await read(header.readUInt32BE(4) + 4);
+        const packet = Buffer.concat([header, rest]);
+        received.push(packet);
+        const ack = Buffer.alloc(4);
+        ack.writeUInt32BE(packet[9] ?? 0);
+        socket.end(ack);
+      },
+      async (port) => {
+        const config = playbackConfig(directory, port);
+        const offline = await launch("run");
+        assert.equal(offline.code, 3);
+        assert.equal(offline.stdout, "");
+        assert.equal(offline.stderr, "connection-closed\n");
+        const checkpoint = join(directory, "private-state", "checkpoint.json");
+        const body = JSON.parse(
+          JSON.parse(readFileSync(checkpoint, "utf8")).body,
+        );
+        assert.deepEqual(
+          [body.captured, body.acknowledged, body.records.length],
+          [3, 0, 3],
+        );
+        const pending = body.pending;
+        online = true;
+        const resumed = await launch("resume");
+        assert.equal(resumed.code, 0, resumed.stderr);
+        assert.deepEqual(JSON.parse(resumed.stdout), {
+          status: "acknowledged",
+          recordCount: 3,
+        });
+        assert.equal(resumed.stderr, "");
+        assert.equal(received[0]?.toString("hex"), pending);
+        assert.deepEqual(
+          received.map((packet) => packet[9]),
+          [2, 1],
+        );
+        const count = received.length;
+        assert.equal((await launch("resume")).code, 0);
+        assert.equal(received.length, count);
+        config.playback.intervalMs = 500;
+        writeFileSync(join(directory, "config.json"), JSON.stringify(config));
+        const mismatch = await launch("resume");
+        assert.equal(mismatch.code, 4);
+        assert.equal(mismatch.stderr, "spool-mismatch\n");
+        assert.equal(received.length, count);
+      },
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SIGKILL and cooperative SIGTERM preserve uncertain packets for byte-exact resume", {
+  timeout: 15000,
+}, async () => {
+  const { spawn } = await import("node:child_process");
+  const { playbackConfig } = await import("./playback-fixture.ts");
+  for (const signal of ["SIGKILL", "SIGTERM"] as const) {
+    const directory = mkdtempSync(join(tmpdir(), "fleetiq-interrupt-"));
+    let online = false;
+    let child: import("node:child_process").ChildProcess | undefined;
+    const received: Buffer[] = [];
+    const launch = (command: string) => {
+      let stdout = "",
+        stderr = "";
+      child = spawn(
+        process.execPath,
+        ["src/cli.ts", command, "--config", join(directory, "config.json")],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+      child.stdout?.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr?.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+      return new Promise<{
+        code: number | null;
+        signal: NodeJS.Signals | null;
+        stdout: string;
+        stderr: string;
+      }>((done) =>
+        child?.once("close", (code, signal) =>
+          done({ code, signal, stdout, stderr }),
+        ),
+      );
+    };
+    try {
+      await withPeer(
+        async (socket) => {
+          const read = await login(socket);
+          socket.write(Buffer.from([1]));
+          const header = await read(8);
+          const packet = Buffer.concat([
+            header,
+            await read(header.readUInt32BE(4) + 4),
+          ]);
+          received.push(packet);
+          if (!online) {
+            assert.ok(child);
+            child.kill(signal);
+            return;
+          }
+          const ack = Buffer.alloc(4);
+          ack.writeUInt32BE(packet[9] ?? 0);
+          socket.end(ack);
+        },
+        async (port) => {
+          playbackConfig(directory, port);
+          const stopped = await launch("run");
+          assert.equal(stopped.stdout, "");
+          if (signal === "SIGTERM") {
+            assert.equal(stopped.code, 130);
+            assert.equal(stopped.stderr, "cancelled\n");
+          } else assert.equal(stopped.signal, "SIGKILL");
+          const state = JSON.parse(
+            JSON.parse(
+              readFileSync(
+                join(directory, "private-state", "checkpoint.json"),
+                "utf8",
+              ),
+            ).body,
+          );
+          assert.equal(state.acknowledged, 0);
+          assert.equal(state.pending, received[0]?.toString("hex"));
+          online = true;
+          const recovered = await launch("resume");
+          assert.equal(recovered.code, 0, recovered.stderr);
+          assert.deepEqual(JSON.parse(recovered.stdout), {
+            status: "acknowledged",
+            recordCount: 3,
+          });
+          assert.deepEqual(received[1], received[0]);
+          assert.deepEqual(
+            received.map((bytes) => bytes[9]),
+            [2, 2, 1],
+          );
+        },
+      );
+    } finally {
+      child?.kill("SIGKILL");
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+});
+
+test("playback validation checks private inputs offline without creating checkpoint state", async () => {
+  const { existsSync } = await import("node:fs");
+  const { playbackConfig } = await import("./playback-fixture.ts");
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-validate-spool-"));
+  try {
+    playbackConfig(directory, 55027);
+    const errors: string[] = [];
+    assert.equal(
+      runCli(
+        ["validate", "--config", join(directory, "config.json")],
+        (error) => errors.push(error),
+      ),
+      0,
+    );
+    assert.deepEqual(errors, []);
+    assert.equal(existsSync(join(directory, "private-state")), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

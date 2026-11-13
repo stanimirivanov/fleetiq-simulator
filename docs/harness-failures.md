@@ -51,3 +51,17 @@ A merged correction is not proof of external ruleset or hardware qualification.
 - **Corrective control:** Add a pinned TypeScript parser, explicit source declaration contexts, descriptive-summary and comment-spacing checks. Route the new source gate through existing fast/canonical validation; document all five source modules and retain semantic review.
 - **Evidence:** [Issue #45](https://github.com/stanimirivanov/fleetiq-simulator/issues/45), ignored-source RED fixtures and passing/failing declaration controls in [tests/comments.test.mjs](../tests/comments.test.mjs).
 - **Status:** Local correction under review. Lint cannot determine whether prose is accurate or useful; no external ruleset qualification is implied.
+
+## HF-006: Sequential CLI startups shared one deadline
+
+- **Symptom:** The private-identity CLI acceptance test was cancelled at 3000 ms twice in PR #52 while all result assertions completed.
+- **Root cause:** Six sequential cold Node processes shared one three-second test deadline despite each child having a two-second limit. Coverage and slower CI startup exhausted the aggregate allowance.
+- **Corrective control:** Give each scenario an independent test and private peer/fixture. Preserve the three-second test and two-second child deadlines, all six exit/output assertions and peer wire checks; additionally assert rejected inputs create zero TCP connections. No product deadline or verification floor changes.
+- **Evidence:** [PR #52](https://github.com/stanimirivanov/fleetiq-simulator/pull/52), acceptance cases in [tests/cli.test.ts](../tests/cli.test.ts). The bounded delayed-start reproduction below cancelled the original test and passes the independent cases.
+- **Status:** Local correction under review; hosted CI confirmation remains pending.
+
+Run under the pinned Node version to delay each cold process without changing application code:
+
+```sh
+NODE_OPTIONS='--import=data:text/javascript,await%20new%20Promise(r=>setTimeout(r,550))' node --test --test-name-pattern='CLI sends only|CLI private identity boundary' tests/cli.test.ts
+```

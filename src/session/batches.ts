@@ -57,7 +57,14 @@ export class BatchQueue {
 
   /** Validates/freezes before insertion; overflow never removes or replaces an existing record. */
   enqueue(record: unknown): void {
-    const frame = Codec8Frame.fromExtendedBytes(encodeCodec8e(record));
+    this.enqueueFrame(Codec8Frame.fromExtendedBytes(encodeCodec8e(record)));
+  }
+
+  /** Restores an owned single-record frame without re-encoding frozen checkpoint bytes. */
+  enqueueFrame(input: Codec8Frame): void {
+    const frame = Codec8Frame.fromExtendedBytes(
+      Codec8Frame.snapshot(input).bytes,
+    );
     const size = frame.snapshot().bytes.length;
     if (
       size > this.#limits.maxFrameBytes ||
@@ -85,6 +92,25 @@ export class BatchQueue {
     }
     if (frames.length) this.#pending = combineCodec8e(frames);
     return this.#pending;
+  }
+
+  /** Restores only an exact FIFO prefix, preserving the original in-flight boundary. */
+  restorePending(input: Codec8Frame): void {
+    const snapshot = Codec8Frame.snapshot(input);
+    const count = snapshot.recordCount;
+    if (
+      this.#pending ||
+      count > this.#limits.maxRecords ||
+      count > this.length ||
+      snapshot.bytes.length > this.#limits.maxFrameBytes
+    )
+      throw new SessionError("invalid-session");
+    const expected = combineCodec8e(
+      this.#records.slice(0, count).map((entry) => entry.frame),
+    );
+    if (!expected.snapshot().bytes.equals(snapshot.bytes))
+      throw new SessionError("invalid-session");
+    this.#pending = Codec8Frame.fromExtendedBatchBytes(snapshot.bytes);
   }
 
   /** Commits head removal only for the current opaque handle; stale/forged ACKs leave FIFO intact. */
