@@ -26,3 +26,8 @@ scoped send per lease and drains all running attempts on termination. Never hold
 a lease/socket while backing off or silently apply reference-peer capacity to
 product targets. Probe functions belong to CLI/harness IO owners. Verify with
 `node --test tests/fleet-tcp.test.ts` and `pnpm test:bounds`.
+
+`udp.ts` owns reference-peer datagram sockets under Effect scope. Literal loopback
+only; reject FleetIQ/Compose UDP admission. Check endpoint, both IDs and exact
+count, bound ignored replies/retries and preserve frozen bytes until ACK. Run
+`node --test tests/udp-transport.test.ts`; never place dgram IO in session or wire.

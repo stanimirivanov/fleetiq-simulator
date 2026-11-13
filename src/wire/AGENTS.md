@@ -23,3 +23,8 @@ complete Extended records within 1280 TCP bytes; `combineCodec8e` derives both
 counts, length and CRC from owned single-record frames. Never let session or
 transport override byte/count metadata. Run `node --test tests/codec8e.test.ts`
 for assembly, strict admission, count/byte boundaries and independent CRC checks.
+
+`udp.ts` owns the UDP length/identity/ID envelope and strict seven-byte AVL ACK
+predicate. Reuse validated bodies/counts and omit every TCP envelope/CRC byte.
+Never treat a generic channel ACK as record acceptance. Literal and malformed
+vectors live in `tests/udp.test.ts`; do not derive expected bytes with the encoder.

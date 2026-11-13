@@ -81,9 +81,13 @@ function allowedExternal(layer, name) {
     return ["node:fs", "node:crypto", "node:sqlite"].includes(name);
   if (layer === "session") return name === "ajv/dist/2020.js";
   if (layer === "transport")
-    return ["node:net", "node:dns", "node:timers/promises", "effect"].includes(
-      name,
-    );
+    return [
+      "node:net",
+      "node:dns",
+      "node:dgram",
+      "node:timers/promises",
+      "effect",
+    ].includes(name);
   if (layer === "wire" || layer === "scenarios")
     return name === "ajv/dist/2020.js";
   return (
