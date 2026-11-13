@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "profile": "fmb920-docs-v1",
+  "seed": "normal-day-v1",
+  "startTimeMs": "1700000000000",
+  "clockOffsetMs": 0,
+  "driftPpm": 0,
+  "loop": false,
+  "phases": [
+    {
+      "durationMs": 60000,
+      "speedMmPerSecond": 10000,
+      "ignition": true,
+      "gpsFix": true
+    },
+    {
+      "durationMs": 30000,
+      "speedMmPerSecond": 0,
+      "ignition": false,
+      "gpsFix": true
+    },
+    {
+      "durationMs": 10000,
+      "speedMmPerSecond": 5000,
+      "ignition": true,
+      "gpsFix": false
+    },
+    {
+      "durationMs": 60000,
+      "speedMmPerSecond": 5000,
+      "ignition": true,
+      "gpsFix": true
+    }
+  ]
+}

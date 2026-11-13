@@ -22,6 +22,13 @@ export const groups = [
     branches: 85,
   },
   {
+    name: "scenarios",
+    tests: ["tests/route.test.ts"],
+    sources: ["src/scenarios/route.ts", "src/scenarios/profile.ts"],
+    lines: 90,
+    branches: 85,
+  },
+  {
     name: "session",
     tests: ["tests/tcp.test.ts"],
     sources: ["src/session/state.ts", "src/transport/tcp.ts"],
