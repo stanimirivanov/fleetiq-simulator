@@ -92,3 +92,14 @@ test("platform checkout verification rejects an unrelated Git HEAD", (context) =
   );
   assert.throws(() => verifyCheckout(root), /platform-checkout-failed/);
 });
+
+test("platform corpus qualifies both Extended IO forms and profile boundaries", () => {
+  const cases = platformCases();
+  assert.ok(
+    cases.filter((entry) => entry.expected.startsWith("ok\t142\t1\t")).length >=
+      5,
+  );
+  assert.ok(
+    cases.some((entry) => entry.expected.endsWith("300:0102,65535:00010203ff")),
+  );
+});

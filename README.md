@@ -3,7 +3,7 @@
 For repository boundaries, agent instructions and verification commands, see
 [AGENTS.md](AGENTS.md) and the [coding harness](HARNESS.md).
 
-The simulator validates a versioned Codec 8 record offline or sends it to an
+The simulator validates a versioned Codec 8 or Codec 8 Extended record offline or sends it to an
 authorized local TCP listener using a private device identity file.
 
 Linux is the supported runtime. Use the Node and pnpm pins in
@@ -46,6 +46,24 @@ up to 64 entries of the form `{"id": 1, "hex": "00"}`; values are exactly 1, 2,
 4 or 8 bytes. The encoder groups entries by width and preserves order within
 each group. It derives wire counts, length and CRC. See the
 [Teltonika Codec 8 TCP examples](https://wiki.teltonika-gps.com/view/Codec#Codec_8).
+
+For Codec 8 Extended, add `"codec": "8e"` and `"variableIo": []` to the
+record (including the nested `record` in a run config). Event and IO IDs then
+admit 0–65535; group counts and IDs use two bytes. `io` retains the fixed
+1/2/4/8-byte widths. `variableIo` contains `{ "id": 65535, "hex": "00010203ff" }`
+entries of 1–256 bytes; these always use NX, even for a fixed-sized value.
+The Extended profile rejects duplicate IDs across both lists, more than 64
+combined entries and TCP frames larger than 1280 bytes. Values remain raw hex;
+leading zeros and order within each group are preserved.
+
+An absent `codec` or explicit `"codec": "8"` selects the original Codec 8
+contract. `variableIo` is required only for Extended; unknown selectors and
+cross-codec fields reject. `schemaVersion` remains 1: this is an additive
+selector for this release, while older binaries reject the new fields.
+See the [manufacturer's Extended format](https://wiki.teltonika-gps.com/view/Codec#Codec_8_Extended).
+`pnpm test:platform /path/to/exact-platform-checkout` compares both codecs with
+the pinned native decoder; that decoder rejects timestamps above signed i64
+while the offline encoders retain exact u64 values.
 
 `pnpm check` enforces the verification floor, style, strict types, architecture,
 build, tests, coverage, redacted secret scanning and current dependency advisories.
@@ -106,6 +124,8 @@ The wire layer exposes the AVL payload separately from the TCP envelope.
 `Codec8Frame` validates a single-record TCP envelope and retains a private
 copy of its bytes and declared count. Transport accepts these frames and
 continues to accept raw Buffer inputs through wire validation.
+`fromBytes` remains Codec 8 only; `fromExtendedBytes` explicitly admits Codec 8E.
+Transport snapshots admit either codec, with Extended IO structure checked too.
 
 A receipt counts each locally acknowledged batch once, even if it was sent
 several times. After a connection failure without an ACK, remote acceptance

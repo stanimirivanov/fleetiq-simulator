@@ -139,13 +139,42 @@ function isolatedCopy(bytes: Buffer): Buffer {
   return copy;
 }
 
+// Raw Extended admission walks every group, bounding reads before using lengths.
+// This validates IO structure as well as the envelope before transport snapshots it.
+function validateExtendedIo(bytes: Buffer, end: number): void {
+  let offset = 38;
+  const ids = new Set<number>();
+  function take16(): number {
+    if (offset + 2 > end) throw new FrameError();
+    const value = bytes.readUInt16BE(offset);
+    offset += 2;
+    return value;
+  }
+  for (const width of [1, 2, 4, 8, 0]) {
+    const count = take16();
+    if (count > 64) throw new FrameError();
+    for (let index = 0; index < count; index++) {
+      const id = take16();
+      const length = width || take16();
+      if (ids.has(id) || length === 0 || length > 256 || offset + length > end)
+        throw new FrameError();
+      ids.add(id);
+      offset += length;
+    }
+  }
+  if (offset !== end || ids.size > 64 || ids.size !== bytes.readUInt16BE(36))
+    throw new FrameError();
+}
+
 export class Codec8Frame {
   readonly #bytes: Buffer;
   readonly #recordCount: number;
 
-  private constructor(input: Buffer) {
+  private constructor(input: Buffer, codec = 8) {
     const minimumBytes =
-      tcpLayout.payload + avlLayout.minimumBytes + tcpLayout.checksumBytes;
+      tcpLayout.payload +
+      (codec === 8 ? avlLayout.minimumBytes : 41) +
+      tcpLayout.checksumBytes;
     if (
       !Buffer.isBuffer(input) ||
       input.length < minimumBytes ||
@@ -159,13 +188,14 @@ export class Codec8Frame {
     if (
       bytes.readUInt32BE(tcpLayout.preamble) !== 0 ||
       bytes.readUInt32BE(tcpLayout.length) !== checksum - tcpLayout.payload ||
-      bytes[tcpLayout.payload + avlLayout.codec] !== 8 ||
+      bytes[tcpLayout.payload + avlLayout.codec] !== codec ||
       declaredCount !== recordCount ||
       bytes[checksum - 1] !== declaredCount ||
       bytes.readUInt32BE(checksum) !==
         crc16Arc(bytes.subarray(tcpLayout.payload, checksum))
     )
       throw new FrameError();
+    if (codec === 0x8e) validateExtendedIo(bytes, checksum - 1);
     this.#bytes = bytes;
     this.#recordCount = declaredCount;
     Object.freeze(this);
@@ -173,6 +203,9 @@ export class Codec8Frame {
 
   static fromBytes(bytes: Buffer): Codec8Frame {
     return new Codec8Frame(bytes);
+  }
+  static fromExtendedBytes(bytes: Buffer): Codec8Frame {
+    return new Codec8Frame(bytes, 0x8e);
   }
   static fromRecord(value: unknown): Codec8Frame {
     return new Codec8Frame(encodeCodec8(value));
@@ -184,7 +217,9 @@ export class Codec8Frame {
   // Private fields establish the runtime brand, so forged metadata and virtual
   // snapshot methods cannot alter the bytes and count consumed by transport.
   static snapshot(value: Codec8Frame | Buffer) {
-    const frame = Buffer.isBuffer(value) ? new Codec8Frame(value) : value;
+    const frame = Buffer.isBuffer(value)
+      ? new Codec8Frame(value, value[8] === 0x8e ? 0x8e : 8)
+      : value;
     if (!(frame instanceof Codec8Frame) || !(#bytes in frame))
       throw new FrameError();
     return {
