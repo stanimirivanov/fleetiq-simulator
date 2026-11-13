@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   closeSync,
   constants,
   fstatSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readSync,
   renameSync,
+  type Stats,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -47,6 +50,7 @@ function io<T>(action: () => T): T {
 export class FileStore {
   #directory: number | undefined;
   #db: DatabaseSync | undefined;
+  #lock: Stats | undefined;
   readonly #hook: (stage: Stage) => void;
 
   /** Pins the owned 0700 directory inode; competing writers fail without stale-lock reclamation. */
@@ -74,10 +78,32 @@ export class FileStore {
       const stat = fstatSync(this.#directory);
       if (stat.uid !== process.getuid?.() || (stat.mode & 0o777) !== 0o700)
         throw new SpoolError("spool-invalid");
-      const lock = this.#file("writer.sqlite", true);
-      const fresh = fstatSync(lock).size === 0;
-      closeSync(lock);
+      let prior: Stats | undefined;
+      try {
+        prior = lstatSync(this.#path("writer.sqlite"));
+        this.#validate(prior);
+      } catch (error) {
+        if (
+          !(
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ENOENT"
+          )
+        )
+          throw error;
+      }
+      const fresh = prior === undefined || prior.size === 0;
+
+      // Only SQLite may open/close this inode: unrelated closes release POSIX locks.
       this.#db = io(() => new DatabaseSync(this.#path("writer.sqlite")));
+      if (prior === undefined) chmodSync(this.#path("writer.sqlite"), 0o600);
+      this.#lock = lstatSync(this.#path("writer.sqlite"));
+      this.#validate(this.#lock);
+      if (
+        prior &&
+        (prior.ino !== this.#lock.ino || prior.dev !== this.#lock.dev)
+      )
+        throw new SpoolError("spool-invalid");
       const db = this.#db;
       io(() => {
         db.exec(
@@ -116,26 +142,36 @@ export class FileStore {
     }
   }
 
-  /** Verifies private regular single-link files before SQLite or checkpoint parsing can touch them. */
-  #file(name: string, create = false): number {
-    const fd = openSync(
-      this.#path(name),
-      constants.O_RDWR |
-        constants.O_NONBLOCK |
-        constants.O_NOFOLLOW |
-        (create ? constants.O_CREAT : 0),
-      0o600,
-    );
-    const stat = fstatSync(fd);
+  /** Rejects unsafe metadata without opening an inode that might hold another writer's lock. */
+  #validate(stat: Stats): void {
     if (
       !stat.isFile() ||
       stat.uid !== process.getuid?.() ||
       (stat.mode & 0o777) !== 0o600 ||
       stat.nlink !== 1 ||
       stat.size > 17000000
-    ) {
-      closeSync(fd);
+    )
       throw new SpoolError("spool-invalid");
+  }
+
+  /** Opens only validated checkpoint inodes, excluding aliases of the SQLite lock database. */
+  #file(name: string): number {
+    const prior = lstatSync(this.#path(name));
+    this.#validate(prior);
+    if (prior.ino === this.#lock?.ino && prior.dev === this.#lock.dev)
+      throw new SpoolError("spool-invalid");
+    const fd = openSync(
+      this.#path(name),
+      constants.O_RDWR | constants.O_NONBLOCK | constants.O_NOFOLLOW,
+    );
+    try {
+      const stat = fstatSync(fd);
+      this.#validate(stat);
+      if (stat.ino !== prior.ino || stat.dev !== prior.dev)
+        throw new SpoolError("spool-invalid");
+    } catch (error) {
+      closeSync(fd);
+      throw error;
     }
     return fd;
   }

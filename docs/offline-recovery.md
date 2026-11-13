@@ -86,3 +86,7 @@ emitted for incomplete work. Submission counters count preparations/calls, not
 hidden transport-internal attempts. Fleet, gap/fault scheduling, migrations and
 installed/hardware qualification remain later slices. The byte budget is not an
 RSS or filesystem-volume proof.
+
+SQLite exclusively owns descriptors for its lock database: [closing an unrelated
+descriptor can release process-owned POSIX locks](https://sqlite.org/howtocorrupt.html#posix_advisory_locks_canceled_by_a_separate_thread_doing_close_). A regression rejects a second
+in-process opener, then verifies that a separate process remains locked out.
