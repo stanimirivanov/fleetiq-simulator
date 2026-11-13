@@ -83,38 +83,30 @@ test("CLI reads bounded files, redacts failures and writes private bytes once", 
   }
 });
 
-test("CLI sends only with a private identity file and prints a sanitized receipt", {
-  timeout: 3000,
-}, async () => {
+type IdentityScenario =
+  | "parent identity path"
+  | "inline identity"
+  | "unapproved destination"
+  | "public identity file"
+  | "acknowledged receipt"
+  | "login refusal";
+
+/** Exercises one private CLI invocation and its exact output against an independent peer. */
+async function verifyIdentityScenario(scenario: IdentityScenario) {
   const { execFile } = await import("node:child_process");
-  const { mkdtemp, rm, writeFile, chmod } = await import("node:fs/promises");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
+  const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
   const directory = await mkdtemp(join(tmpdir(), "fleetiq-tcp-"));
   try {
     const config = join(directory, "config.json");
-    const identities = join(directory, "identities.json");
-    const run = () =>
-      new Promise<{ code: number; stdout: string; stderr: string }>(
-        (resolve) => {
-          execFile(
-            process.execPath,
-            ["src/cli.ts", "run", "--config", config],
-            { timeout: 2000 },
-            (error, stdout, stderr) => {
-              resolve({ code: Number(error?.code ?? 0), stdout, stderr });
-            },
-          );
-        },
-      );
+    let connections = 0;
     await withPeer(
-      async (socket, attempt) => {
+      async (socket) => {
+        connections++;
         const read = await login(socket);
-        if (attempt === 2) {
+        if (scenario === "login refusal") {
           socket.end(Buffer.from([0]));
           return;
         }
-        assert.equal(attempt, 1);
         socket.write(Buffer.from([1]));
         const received = await read(45);
         assert.equal(received[8], 8);
@@ -124,9 +116,17 @@ test("CLI sends only with a private identity file and prints a sanitized receipt
       async (port) => {
         const inputs = {
           schemaVersion: 1,
-          identityFile: "identities.json",
+          identityFile:
+            scenario === "parent identity path"
+              ? "../identities.json"
+              : "identities.json",
           deviceId: "sim-a",
-          target: { transport: "tcp", host: "127.0.0.1", port },
+          target: {
+            transport: "tcp",
+            host:
+              scenario === "unapproved destination" ? "localhost" : "127.0.0.1",
+            port,
+          },
           record: {
             schemaVersion: 1,
             timestampMs: "0",
@@ -140,45 +140,74 @@ test("CLI sends only with a private identity file and prints a sanitized receipt
             eventId: 0,
             io: [],
           },
+          ...(scenario === "inline identity" ? { imei: identity } : {}),
         };
-        for (const invalid of [
-          { ...inputs, identityFile: "../identities.json" },
-          { ...inputs, imei: identity },
-          { ...inputs, target: { ...inputs.target, host: "localhost" } },
-        ]) {
-          await writeFile(config, JSON.stringify(invalid));
-          assert.deepEqual(await run(), {
-            code: 2,
-            stdout: "",
-            stderr: "invalid-run-config\n",
-          });
-        }
         await writeFile(config, JSON.stringify(inputs));
-        await writeFile(identities, JSON.stringify({ "sim-a": identity }), {
-          mode: 0o644,
+        await writeFile(
+          join(directory, "identities.json"),
+          JSON.stringify({ "sim-a": identity }),
+          {
+            mode: scenario === "public identity file" ? 0o644 : 0o600,
+          },
+        );
+        const result = await new Promise<{
+          code: number;
+          stdout: string;
+          stderr: string;
+        }>((resolve) => {
+          execFile(
+            process.execPath,
+            ["src/cli.ts", "run", "--config", config],
+            { timeout: 2000 },
+            (error, stdout, stderr) => {
+              resolve({ code: Number(error?.code ?? 0), stdout, stderr });
+            },
+          );
         });
-        assert.deepEqual(await run(), {
-          code: 2,
-          stdout: "",
-          stderr: "invalid-identity-file\n",
-        });
-        await chmod(identities, 0o600);
-        assert.deepEqual(await run(), {
-          code: 0,
-          stdout: '{"status":"acknowledged","recordCount":1}\n',
-          stderr: "",
-        });
-        assert.deepEqual(await run(), {
-          code: 3,
-          stdout: "",
-          stderr: "login-refused\n",
-        });
+        const sends =
+          scenario === "acknowledged receipt" || scenario === "login refusal";
+        assert.equal(connections, sends ? 1 : 0);
+        assert.deepEqual(
+          result,
+          scenario === "acknowledged receipt"
+            ? {
+                code: 0,
+                stdout: '{"status":"acknowledged","recordCount":1}\n',
+                stderr: "",
+              }
+            : {
+                code: scenario === "login refusal" ? 3 : 2,
+                stdout: "",
+                stderr: `${scenario === "login refusal" ? "login-refused" : scenario === "public identity file" ? "invalid-identity-file" : "invalid-run-config"}\n`,
+              },
+        );
       },
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+// Each cold CLI process owns a deadline; unrelated invocations must not share one.
+test("CLI sends only with a private identity file and prints a sanitized receipt", {
+  timeout: 3000,
+}, async () => {
+  await verifyIdentityScenario("acknowledged receipt");
 });
+
+for (const scenario of [
+  "parent identity path",
+  "inline identity",
+  "unapproved destination",
+  "public identity file",
+  "login refusal",
+] as const) {
+  test(`CLI private identity boundary: ${scenario}`, {
+    timeout: 3000,
+  }, async () => {
+    await verifyIdentityScenario(scenario);
+  });
+}
 
 test("expected input failures preserve their category and precedence", async () => {
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-error-order-"));
