@@ -113,6 +113,46 @@ try {
   assert.equal(code, 0);
   assert.equal(error, "");
   assert.equal(output, '{"status":"acknowledged","recordCount":1}\n');
+  writeFileSync(
+    `${directory}/fault.json`,
+    JSON.stringify({
+      schemaVersion: 1,
+      identityFile: "identities.json",
+      deviceId: "sim-a",
+      records: [record, record],
+      target: { transport: "tcp", host: "127.0.0.1", port: address.port },
+      retry: { maxAttempts: 1, ackDeadlineMs: 3000, totalDeadlineMs: 5000 },
+      faults: {
+        schemaVersion: 1,
+        authorizedLocalTarget: true,
+        actions: [
+          { packet: 1, kind: "duplicate-record" },
+          { packet: 2, kind: "split-write", offset: 7 },
+        ],
+      },
+    }),
+    { mode: 0o600 },
+  );
+  const faultChild = spawn(
+    process.execPath,
+    ["/app/dist/cli.js", "fault", "--config", `${directory}/fault.json`],
+    { timeout: 10000, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let faultOutput = "";
+  let faultError = "";
+  faultChild.stdout.on("data", (data) => {
+    faultOutput += data;
+  });
+  faultChild.stderr.on("data", (data) => {
+    faultError += data;
+  });
+  const [faultCode] = await once(faultChild, "close");
+  assert.equal(faultCode, 0);
+  assert.equal(faultError, "");
+  assert.equal(
+    faultOutput,
+    '{"status":"faults-completed","packets":3,"acknowledged":3,"denied":0,"disconnected":0}\n',
+  );
   const storageModule = "/app/dist/storage/spool.js";
 
   /** @type {typeof import("../src/storage/spool.ts")} */

@@ -219,3 +219,37 @@ test("checkpoint storage owns file/SQLite effects while session depends only on 
   assert.match(bad, /external-import/);
   assert.match(bad, /layer-import/);
 });
+
+test("transport consumes pure fault plans while scenarios cannot import socket owners", () => {
+  assert.deepEqual(
+    checkArchitecture(
+      files({
+        "transport/tcp.ts": 'import "../scenarios/faults.ts";',
+        "scenarios/faults.ts": 'import "../wire/codec8.ts";',
+      }),
+    ),
+    [],
+  );
+  assert.match(
+    checkArchitecture(
+      files({
+        "scenarios/faults.ts": 'import "../transport/tcp.ts";',
+        "transport/tcp.ts": "",
+      }),
+    ).join("\n"),
+    /layer-import/,
+  );
+});
+
+// Consuming the fault policy does not grant transport access to other scenario implementations.
+test("transport fault policy dependency does not widen to route/model owners", () => {
+  assert.match(
+    checkArchitecture(
+      files({
+        "transport/tcp.ts": 'import "../scenarios/route.ts";',
+        "scenarios/route.ts": "",
+      }),
+    ).join("\n"),
+    /layer-import/,
+  );
+});

@@ -56,8 +56,8 @@ docs/harness-failures.md   sanitized root causes, controls and evidence
 | CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, scenarios, storage, Ajv, Node fs/path/url/crypto. Runtime transport loads are confined to the network command |
 | Storage | Private checkpoint IO, atomic replacement and exclusive writer lock | Storage, session, Node fs/crypto/sqlite |
 | Session state | Validated settings, monotonic run budget, error categories | Session/wire modules and Ajv checkpoint validation; filesystem effects stay in storage |
-| TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, Node net, Effect |
-| Scenarios | Virtual route position, last sampled fix and documented model IO | Scenarios, wire and Ajv; no ambient effects |
+| TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, pure `scenarios/faults.ts` only, Node net/dns, Effect |
+| Scenarios | Virtual route position, last sampled fix, model IO and deterministic fault plans | Scenarios, wire and Ajv; no ambient effects |
 | Wire | Validated record, AVL payload, TCP envelope and immutable frame metadata | Wire and Ajv |
 
 The TypeScript AST gate checks imports, re-exports, import types, literal dynamic

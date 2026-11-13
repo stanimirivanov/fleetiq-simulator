@@ -47,6 +47,8 @@ export type SessionOptions = {
  * Reviewed session failure categories safe for output without endpoints, identities or peer bytes.
  */
 export type Failure =
+  | "disconnect-timeout"
+  | "fault-accepted"
   | "invalid-session"
   | "cancelled"
   | "run-timeout"

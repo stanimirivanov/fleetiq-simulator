@@ -219,3 +219,10 @@ checkpointing, frozen pending packets and atomic ACK/cursor commits. See the
 [run template](scenarios/offline.json) and [recovery contract](docs/offline-recovery.md).
 Existing single-record CLI configs stay compatible. Recovery may repeat remote
 acceptance after an uncertain ACK; it does not claim exactly-once delivery.
+
+## Deterministic faults (SIM-PR12)
+
+An explicit authorized-local `fault` command applies packet-ordinal CRC, truncation,
+split, duplicate, late-time, identity and disconnect actions after valid encoding.
+It reports sanitized observations separately from delivery receipts. See the
+[fault contract](docs/fault-scenarios.md) and [action example](scenarios/faults.json).

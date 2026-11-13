@@ -16,3 +16,8 @@ scenario coverage group retains 90% lines / 85% branches. `capture.ts` owns capt
 elapsed time to virtual time. Route metadata exposes state transitions without
 advancing GPS samples. Keep transport deadlines outside all three. Use
 `node --test tests/capture.test.ts` for clock, trigger and batching composition.
+
+`faults.ts` snapshots already-valid single-record frames and applies one explicit
+action per original packet ordinal. Keep malformed bytes out of valid wire
+constructors; mutations, identity selection and duplicate expansion happen before
+IO. `node --test tests/faults.test.ts` checks admission, exact bytes and bounds.

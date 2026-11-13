@@ -23,12 +23,17 @@ export const groups = [
   },
   {
     name: "scenarios",
-    tests: ["tests/route.test.ts", "tests/capture.test.ts"],
+    tests: [
+      "tests/route.test.ts",
+      "tests/capture.test.ts",
+      "tests/faults.test.ts",
+    ],
     sources: [
       "src/scenarios/route.ts",
       "src/scenarios/profile.ts",
       "src/scenarios/capture.ts",
       "src/scenarios/clock.ts",
+      "src/scenarios/faults.ts",
     ],
     lines: 90,
     branches: 85,
@@ -39,6 +44,7 @@ export const groups = [
       "tests/tcp.test.ts",
       "tests/batches.test.ts",
       "tests/spool.test.ts",
+      "tests/fault-tcp.test.ts",
     ],
     sources: [
       "src/session/state.ts",

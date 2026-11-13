@@ -11,6 +11,7 @@ import { basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { capture } from "./scenarios/capture.ts";
+import { FaultError, faultSchema, planFaults } from "./scenarios/faults.ts";
 import { ProfileError } from "./scenarios/profile.ts";
 import { createPlayback, ScenarioError } from "./scenarios/route.ts";
 import { BatchQueue } from "./session/batches.ts";
@@ -100,6 +101,10 @@ function reportFailure(
   }
   if (error instanceof RecordError) {
     report("invalid-record");
+    return 2;
+  }
+  if (error instanceof FaultError) {
+    report("invalid-faults");
     return 2;
   }
   if (error instanceof SessionError) {
@@ -202,6 +207,13 @@ export function run(
   let frame: Buffer;
   try {
     const value = readInput(input);
+    if (command === "validate" && validFaultConfig(value)) {
+      const task = selectFault(value);
+      const identity = readIdentity(task.config, dirname(input));
+      const alternate = readAlternate(task.config, dirname(input));
+      planFaults(task.frames, task.config.faults, identity, alternate);
+      return 0;
+    }
     if (command === "validate" && validPlaybackConfig(value)) {
       const pinned = openPlaybackRoot(input, value);
       try {
@@ -295,6 +307,53 @@ export const runConfigSchema = {
 const validRunConfig = new Ajv2020({ ownProperties: true }).compile<RunConfig>(
   runConfigSchema,
 );
+
+/** Explicit fault input stays separate from ordinary delivery and durable playback configs. */
+export type FaultRunConfig = Omit<RunConfig, "record" | "connectionPolicy"> & {
+  records: Record<string, unknown>[];
+  faults: unknown;
+  unregisteredDeviceId?: string;
+};
+const {
+  record: _faultRecord,
+  connectionPolicy: _faultPolicy,
+  ...faultCommon
+} = runConfigSchema.properties;
+const validFaultConfig = new Ajv2020({
+  ownProperties: true,
+}).compile<FaultRunConfig>({
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "identityFile", "deviceId", "records", "faults"],
+  properties: {
+    ...faultCommon,
+    records: {
+      type: "array",
+      minItems: 1,
+      maxItems: 16,
+      items: { type: "object" },
+    },
+    faults: faultSchema,
+    unregisteredDeviceId: runConfigSchema.properties.deviceId,
+  },
+});
+
+/** Rejects malformed fault envelopes before admitting any encoded record or identity lookup. */
+function selectFault(value: unknown) {
+  if (!validFaultConfig(value)) throw new InputError("invalid-run-config");
+  return {
+    kind: "fault" as const,
+    config: value,
+    frames: value.records.map(encodeAvlRecord),
+  };
+}
+
+/** Alternate identities remain private file entries; operators must independently verify they are unregistered. */
+function readAlternate(config: FaultRunConfig, root: string) {
+  return config.unregisteredDeviceId
+    ? readIdentity({ ...config, deviceId: config.unregisteredDeviceId }, root)
+    : undefined;
+}
 
 /** Accelerated playback inputs are sibling private files; queue state lives in a dedicated directory. */
 export type PlaybackRunConfig = Omit<RunConfig, "record"> & {
@@ -596,9 +655,9 @@ async function runPlayback(
 
 /**
  * Validates run config, record and private identity before lazily loading transport.
- * Preserves the legacy single-record mode or runs durable accelerated playback.
- * Calls acknowledge only
- * after a matching wire ACK. Returns a CLI exit code and reports fixed categories;
+ * Preserves ordinary delivery/playback and requires the explicit fault command for mutations.
+ * Calls acknowledge only after a matching delivery ACK; fault observations use a separate callback.
+ * Returns a CLI exit code and reports fixed categories;
  * no receipt asserts downstream projection or browser acceptance.
  */
 export async function runTcp(
@@ -606,6 +665,9 @@ export async function runTcp(
   report: (category: string) => void,
   signal: AbortSignal,
   acknowledge: (receipt: DeliveryReceipt) => void = () => {},
+  observeFault: (
+    receipt: import("./transport/tcp.ts").FaultReceipt,
+  ) => void = () => {},
 ): Promise<number> {
   const [, flag, path] = args;
   if (flag !== "--config" || !path || args.length !== 3) {
@@ -613,7 +675,8 @@ export async function runTcp(
     return 2;
   }
   try {
-    const task = selectRun(readInput(path));
+    const value = readInput(path);
+    const task = args[0] === "fault" ? selectFault(value) : selectRun(value);
     const config = task.config;
     if (args[0] === "resume" && task.kind !== "playback")
       throw new InputError("invalid-run-config");
@@ -628,7 +691,25 @@ export async function runTcp(
         Boolean(inputRoot),
       );
 
-      const { sendBatches } = await import("./transport/tcp.ts");
+      const { sendBatches, sendFaultBatches } = await import(
+        "./transport/tcp.ts"
+      );
+      if (task.kind === "fault") {
+        const receipt = await sendFaultBatches(
+          task.frames,
+          task.config.faults,
+          {
+            host: config.target?.host ?? defaultTarget.host,
+            port: config.target?.port ?? defaultTarget.port,
+            ...config.retry,
+            identity,
+            signal,
+            unregisteredIdentity: readAlternate(task.config, dirname(path)),
+          },
+        );
+        observeFault(receipt);
+        return 0;
+      }
       if (task.kind === "playback")
         return await runPlayback(
           task.config,
@@ -643,7 +724,7 @@ export async function runTcp(
         host: config.target?.host ?? defaultTarget.host,
         port: config.target?.port ?? defaultTarget.port,
         ...config.retry,
-        connectionPolicy: config.connectionPolicy,
+        connectionPolicy: task.config.connectionPolicy,
         identity,
         signal,
       });
@@ -663,7 +744,7 @@ if (
 ) {
   const args = process.argv.slice(2);
   const report = (category: string) => process.stderr.write(`${category}\n`);
-  if (args[0] === "run" || args[0] === "resume") {
+  if (args[0] === "run" || args[0] === "resume" || args[0] === "fault") {
     const controller = new AbortController();
     const cancel = () => controller.abort();
     process.once("SIGINT", cancel);
@@ -676,6 +757,10 @@ if (
         (receipt) =>
           process.stdout.write(
             `${JSON.stringify({ status: receipt.status, recordCount: receipt.recordCount })}\n`,
+          ),
+        (receipt) =>
+          process.stdout.write(
+            `${JSON.stringify({ status: receipt.status, packets: receipt.packets, acknowledged: receipt.acknowledged, denied: receipt.denied, disconnected: receipt.disconnected })}\n`,
           ),
       );
     } finally {

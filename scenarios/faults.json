@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "authorizedLocalTarget": true,
+  "actions": [
+    { "packet": 1, "kind": "split-write", "offset": 7 },
+    { "packet": 2, "kind": "duplicate-record" },
+    { "packet": 3, "kind": "corrupt-crc" },
+    { "packet": 4, "kind": "truncate-close", "offset": 11 },
+    { "packet": 5, "kind": "late-event-time", "timestampMs": "1" },
+    { "packet": 6, "kind": "unregistered-identity" },
+    { "packet": 7, "kind": "disconnect-before-write" },
+    { "packet": 8, "kind": "disconnect-after-write" }
+  ]
+}

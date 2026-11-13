@@ -16,3 +16,7 @@ Verify transport behavior against the independent peer with
 Use wire-owned frame snapshots and counts for ACK matching. A successful
 receipt counts locally acknowledged records once per completed batch.
 Retried bytes may have been accepted remotely before an ACK was lost.
+
+Explicit fault execution consumes only the pure `scenarios/faults.ts` plan; other
+scenario imports stay forbidden. Run `node --test tests/fault-tcp.test.ts`. Fault
+traffic has no retries or durable ACK removals and reports observations separately.
