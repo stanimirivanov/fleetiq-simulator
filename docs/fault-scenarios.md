@@ -61,7 +61,9 @@ for deliberately invalid traffic. It does not prove why a server denied traffic;
 a broken/unavailable server can produce the same observation. A positive count
 for malformed/unregistered traffic fails as `fault-accepted` (exit 3). Unexpected
 failures on valid traffic, whole-run expiry and cancellation are never counted as
-denials. Invalid plans return a fixed `invalid-faults` / `invalid-run-config`
+denials. A peer withholding closure after the deliberate FIN fails with
+`disconnect-timeout` at the exchange cap, or `run-timeout` when the shared run
+budget expires first. Invalid plans return a fixed `invalid-faults` / `invalid-run-config`
 category (exit 2). Cancellation remains 130. No private bytes or identities enter
 output. Later installed qualification must correlate observations with real
 server diagnostics; these peer tests are not that qualification.

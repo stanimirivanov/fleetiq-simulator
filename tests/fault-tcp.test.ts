@@ -207,3 +207,32 @@ test("fault TCP does not count cancellation, run expiry or an invalid target as 
     },
   );
 });
+
+test("after-write closure expiry distinguishes the exchange cap from the whole-run budget", {
+  timeout: 3000,
+}, async () => {
+  await withPeer(
+    async (socket) => {
+      socket.allowHalfOpen = true;
+      await login(socket);
+      socket.write(Buffer.from([1]));
+    },
+    async (port) => {
+      const input = spec([{ packet: 1, kind: "disconnect-after-write" }]);
+      await assert.rejects(
+        sendFaultBatches([bytes], input, {
+          ...options(port),
+          ackDeadlineMs: 500,
+        }),
+        /^Error: disconnect-timeout$/,
+      );
+      await assert.rejects(
+        sendFaultBatches([bytes], input, {
+          ...options(port),
+          totalDeadlineMs: 30,
+        }),
+        /^Error: run-timeout$/,
+      );
+    },
+  );
+});

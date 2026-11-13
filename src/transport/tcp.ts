@@ -363,8 +363,18 @@ export async function sendFaultBatches(
         if (packet.disconnect !== null) {
           if (packet.disconnect === "after") {
             const remaining = yield* remainingBudget(limits);
+            const wait = Math.min(limits.ackDeadlineMs, remaining);
+            const deadline = limits.now() + wait;
+            const timeout = new SessionError(
+              remaining <= limits.ackDeadlineMs
+                ? "run-timeout"
+                : "disconnect-timeout",
+            );
             yield* Effect.callback<void, SessionError>((resume) => {
-              const closed = () => resume(Effect.void);
+              const closed = () =>
+                resume(
+                  limits.now() >= deadline ? Effect.fail(timeout) : Effect.void,
+                );
               socket.once("close", closed);
 
               // Drain replies only to finish FIN; this deliberate disconnect never credits an ACK.
@@ -373,8 +383,8 @@ export async function sendFaultBatches(
               return Effect.sync(() => socket.off("close", closed));
             }).pipe(
               Effect.timeoutOrElse({
-                duration: Math.ceil(Math.min(limits.ackDeadlineMs, remaining)),
-                orElse: () => Effect.fail(new SessionError("run-timeout")),
+                duration: Math.ceil(wait),
+                orElse: () => Effect.fail(timeout),
               }),
             );
           }
@@ -418,6 +428,7 @@ export async function sendFaultBatches(
         }),
       );
       yield* connection;
+      yield* remainingBudget(limits);
     }
     return result;
   });
