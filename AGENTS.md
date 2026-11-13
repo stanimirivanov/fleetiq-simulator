@@ -9,6 +9,7 @@ schemas and Effect for TCP resource lifetime.
 | Touching | Read next |
 | --- | --- |
 | `src/cli.ts` or CLI contracts | [Source guide](src/AGENTS.md) |
+| Route playback and model IO | [Scenario guide](src/scenarios/AGENTS.md) |
 | Encoding and record validation | [Wire guide](src/wire/AGENTS.md) |
 | Session settings or budget | [Session guide](src/session/AGENTS.md) |
 | Handshake, ACK or retries | [Transport guide](src/transport/AGENTS.md) |

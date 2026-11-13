@@ -53,15 +53,16 @@ docs/harness-failures.md   sanitized root causes, controls and evidence
 
 | Owner | State or effects owned | Allowed production dependencies |
 | --- | --- | --- |
-| CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, Ajv, Node fs/path/url. Runtime transport loads are confined to the network command |
+| CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, scenarios, Ajv, Node fs/path/url. Runtime transport loads are confined to the network command |
 | Session state | Validated settings, monotonic run budget, error categories | Session and wire modules, without external imports |
 | TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, Node net, Effect |
+| Scenarios | Virtual route position, last sampled fix and documented model IO | Scenarios, wire and Ajv; no ambient effects |
 | Wire | Validated record, AVL payload, TCP envelope and immutable frame metadata | Wire and Ajv |
 
 The TypeScript AST gate checks imports, re-exports, import types, literal dynamic
 imports, unsupported CommonJS imports and cycles. New ownership requires a
 policy change with tests. The gate distinguishes type-only edges from runtime
-loads and checks selected ambient wire APIs. A Node load canary verifies that
+loads and checks selected ambient wire/scenario APIs. A Node load canary verifies that
 offline commands never load transport in source or built execution. These
 checks complement the loopback tests that protect transport semantics.
 
@@ -334,7 +335,8 @@ The simulator admits u64 timestamps and duplicate IO IDs; this platform revision
 rejects timestamps above i64::MAX and duplicate IDs as Malformed (code 1).
 Those original cases remain explicit rejection checks, with additional signed
 timestamp boundary, duplicate-ID and checksum (code 4) controls. Current results:
-262 cases, 165 exact accepted records and 97 expected rejections. A deliberately
+275 cases, 177 exact accepted records and 98 expected rejections, including
+Codec 8E and normal-day playback records. A deliberately
 wrong expected result must fail the comparator during every real gate run.
 
 The adapter admits at most 512 lines, 2 MB input and 1280 bytes per frame.

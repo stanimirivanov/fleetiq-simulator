@@ -191,3 +191,13 @@ A failed read-back is not a qualified publication, even if a push allocated byte
 No publication runs on PRs or automatically after merge, and no environment is
 promoted. The first hosted publication and GHCR package access remain maintainer
 qualification actions after this workflow merges.
+
+## Route and model playback (SIM-PR9)
+
+The pure scenario API generates Codec 8E record inputs from bounded GeoJSON,
+versioned phases and the documentation-derived FMB920 profile. It supports speed,
+stops/ignition, explicit looping, GPS-loss state and exact device-clock drift.
+See [the playback contract](docs/scenario-playback.md),
+[normal-day scenario](scenarios/normal-day.json) and
+[reviewed IO catalogue](profiles/fmb920-docs-v1.json). This API does not claim
+hardware fidelity; capture/send scheduling follows in SIM-PR10.

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createPlayback } from "../src/scenarios/route.ts";
 import { encodeCodec8 } from "../src/wire/codec8.ts";
 import { encodeCodec8e } from "../src/wire/codec8e.ts";
 import { generatedCorpus } from "../tests/codec8-corpus.ts";
@@ -102,7 +103,7 @@ function expectedLine(record, codec = 8, variableIo = []) {
   ].join("\t");
 }
 
-/** Retains the exact H9 corpus and adds explicit native-profile boundary controls. */
+/** Retains the H9 corpus and profile boundary controls, adding real scenario-produced records. */
 export function platformCases() {
   const vectors = singleRecordVectors.map((value) => ({
     hex: encodeCodec8(value.record).toString("hex"),
@@ -130,8 +131,33 @@ export function platformCases() {
   }));
   const corrupted = Buffer.from(base.frame, "hex");
   corrupted[corrupted.length - 1] = (corrupted[corrupted.length - 1] ?? 0) ^ 1;
+  const playback = createPlayback(
+    {
+      type: "LineString",
+      coordinates: [
+        [-0.01, 0],
+        [0.01, 0],
+      ],
+    },
+    JSON.parse(
+      readFileSync(
+        new URL("../scenarios/normal-day.json", import.meta.url),
+        "utf8",
+      ),
+    ),
+    JSON.parse(
+      readFileSync(
+        new URL("../profiles/fmb920-docs-v1.json", import.meta.url),
+        "utf8",
+      ),
+    ),
+  );
+  const routeRecords = [0, 30000, 60000, 90000, 100000, 160000].map((at) =>
+    playback.sample(at),
+  );
   return [
     ...[
+      ...routeRecords,
       extended,
       variableRecord,
       { ...variableRecord, variableIo: [{ id: 65535, hex: "00" }] },

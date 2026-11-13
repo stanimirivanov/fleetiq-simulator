@@ -15,7 +15,7 @@ const ambientNames = new Set([
 ]);
 
 /**
- * Resolves wire identifiers against local bindings. A library-free program
+ * Resolves pure wire/scenario identifiers against local bindings. A library-free program
  * lets the guard distinguish ambient references from shadowed names without
  * reading third-party code or the filesystem.
  *
@@ -41,7 +41,9 @@ export function wireAmbient(files) {
   host.fileExists = (file) => files.has(file);
   host.readFile = (file) => files.get(file);
   const program = ts.createProgram(
-    [...files.keys()].filter((file) => file.startsWith("wire/")),
+    [...files.keys()].filter(
+      (file) => file.startsWith("wire/") || file.startsWith("scenarios/"),
+    ),
     options,
     host,
   );

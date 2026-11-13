@@ -174,3 +174,26 @@ test("DNS resolution belongs only to the transport adapter", () => {
     );
   }
 });
+
+test("scenarios depend only on pure scenario/wire contracts and the schema validator", () => {
+  assert.deepEqual(
+    checkArchitecture(
+      files({
+        "cli.ts": 'import "./scenarios/route.ts";',
+        "scenarios/route.ts":
+          'import "ajv/dist/2020.js"; export * from "../wire/codec8.ts";',
+      }),
+    ),
+    [],
+  );
+  const invalid = checkArchitecture(
+    files({
+      "scenarios/route.ts":
+        'import "../session/state.ts"; import "node:fs"; const now = Date.now();',
+      "session/state.ts": 'import "../scenarios/route.ts";',
+    }),
+  ).join("\n");
+  assert.match(invalid, /layer-import/);
+  assert.match(invalid, /external-import/);
+  assert.match(invalid, /wire-ambient/);
+});

@@ -6,6 +6,8 @@ TCP adapter with a literal dynamic import inside the network command. Treat call
 error text as untrusted. Return reviewed error categories without input content,
 paths, endpoints or wire bytes.
 
+`scenarios/` owns deterministic kinematics and model IO, depending only on its
+own modules, wire types and Ajv. It reads no files, clocks or network state.
 `wire/` owns record validation and bytes. `session/` owns policy and
 `transport/` owns handshake and delivery. The CLI composes them. Use explicit relative `.ts` imports so
 Node and the build agree. New top-level source owners require a reviewed

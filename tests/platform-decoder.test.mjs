@@ -103,3 +103,19 @@ test("platform corpus qualifies both Extended IO forms and profile boundaries", 
     cases.some((entry) => entry.expected.endsWith("300:0102,65535:00010203ff")),
   );
 });
+
+test("native corpus retains normal-day motion, stops and no-fix model IO", () => {
+  const records = platformCases()
+    .map(({ expected }) => expected.split("\t"))
+    .filter((fields) => fields[0] === "ok" && fields[3]?.startsWith("1700000"));
+  assert.equal(records.length, 6);
+  assert.ok(
+    records.some(
+      (fields) =>
+        fields[9] === "0" &&
+        fields[10] === "0" &&
+        fields[12]?.includes("240:01"),
+    ),
+  );
+  assert.ok(records.some((fields) => fields[12]?.includes("239:00")));
+});

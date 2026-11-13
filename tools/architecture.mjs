@@ -7,17 +7,18 @@ import { reviewedPath } from "./diagnostic-location.mjs";
 import { wireAmbient } from "./wire-ambient.mjs";
 
 const layers = {
-  cli: ["session", "wire", "transport"],
+  cli: ["session", "wire", "transport", "scenarios"],
   transport: ["transport", "session", "wire"],
   session: ["session", "wire"],
   wire: ["wire"],
+  scenarios: ["scenarios", "wire"],
 };
 
 const remedies = {
   "transport-load":
     "Load transport with a dynamic import inside the CLI runTcp command.",
   "wire-ambient":
-    "Pass deterministic values into the wire encoder instead of reading ambient state.",
+    "Pass deterministic values into wire/scenario code instead of reading ambient state.",
   "unknown-owner":
     "Move the file under an existing owner or review a policy update.",
   "computed-import": "Use a literal module specifier.",
@@ -56,7 +57,12 @@ function moduleContext(file, name) {
 function owner(file) {
   if (file === "cli.ts") return "cli";
   const first = file.split("/")[0];
-  if (first === "wire" || first === "session" || first === "transport")
+  if (
+    first === "wire" ||
+    first === "session" ||
+    first === "transport" ||
+    first === "scenarios"
+  )
     return first;
 }
 
@@ -69,7 +75,8 @@ function owner(file) {
 function allowedExternal(layer, name) {
   if (layer === "transport")
     return ["node:net", "node:dns", "effect"].includes(name);
-  if (layer === "wire") return name === "ajv/dist/2020.js";
+  if (layer === "wire" || layer === "scenarios")
+    return name === "ajv/dist/2020.js";
   return (
     layer === "cli" &&
     ["node:fs", "node:path", "node:url", "ajv/dist/2020.js"].includes(name)
@@ -202,7 +209,10 @@ export function checkArchitecture(files) {
      * @param {ts.Node} node
      */
     const visit = (node) => {
-      if (layer === "wire" && ambient.isAmbient(node))
+      if (
+        (layer === "wire" || layer === "scenarios") &&
+        ambient.isAmbient(node)
+      )
         report(node, "wire-ambient");
       if (
         ts.isImportDeclaration(node) ||

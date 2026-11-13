@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "fmb920-docs-v1",
+  "io": {
+    "ignition": { "id": 239, "width": 1 },
+    "movement": { "id": 240, "width": 1 },
+    "gsm": { "id": 21, "width": 1 },
+    "externalVoltage": { "id": 66, "width": 2 },
+    "batteryVoltage": { "id": 67, "width": 2 },
+    "odometer": { "id": 16, "width": 4 },
+    "fuelUsed": { "id": 12, "width": 4 }
+  }
+}
