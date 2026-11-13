@@ -6,7 +6,7 @@ any approved exception with scope, owner, reason, expiry and a removal issue.
 
 | Control | Required result | Enforcement |
 | --- | --- | --- |
-| Style and types | Biome clean with named exports, strict no-emit check for source, tests and tooling, erasable TypeScript syntax | `pnpm lint`, `pnpm typecheck` |
+| Style and types | Biome clean with named exports, strict no-emit check for source, tests and tooling, erasable TypeScript syntax; descriptive source/tooling JSDoc and comment spacing | `pnpm lint`, `pnpm typecheck` |
 | Source ownership | Closed import direction and external allowlists, no cycles | `pnpm architecture` and architecture fixtures |
 | Build | ESM emitted successfully | `pnpm build` |
 | Wire and session/transport coverage | Each coverage group at least 90% lines and 85% branches | `pnpm test:coverage` |

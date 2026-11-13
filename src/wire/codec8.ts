@@ -1,5 +1,11 @@
 import { Ajv2020, type JSONSchemaType } from "ajv/dist/2020.js";
 
+/**
+ * Single-record Codec 8 input; widths and scalar ranges are enforced by recordSchema.
+ * Timestamps are exact decimal u64 strings, coordinates are signed degrees × 10⁷,
+ * and IO hex retains its 1/2/4/8-byte width. IDs/event are u8; duplicate IDs remain
+ * admitted here although the pinned platform decoder rejects them.
+ */
 export type Record8 = {
   schemaVersion: 1;
   timestampMs: string;
@@ -60,12 +66,19 @@ const properties = {
   },
 } as const;
 
+/**
+ * A record failed closed schema or profile validation; messages never include input values.
+ */
 export class RecordError extends Error {
   constructor() {
     super("invalid-record");
   }
 }
 
+/**
+ * Closed version-1 Codec 8 schema, bounded to 64 fixed-width IO entries.
+ * Encoding also checks the timestamp against u64 before allocating payload bytes.
+ */
 export const recordSchema = {
   type: "object",
   additionalProperties: false,
@@ -89,6 +102,11 @@ const valid = new Ajv2020({ ownProperties: true }).compile<Record8>(
   recordSchema,
 );
 
+/**
+ * Computes CRC-16/ARC with polynomial 0xa001 and zero initial value.
+ * Callers supply only the AVL data field; the TCP preamble, length and CRC field
+ * are outside checksum coverage. This checksum does not authenticate data.
+ */
 export function crc16Arc(bytes: Uint8Array): number {
   let crc = 0;
   for (const byte of bytes) {
@@ -125,25 +143,35 @@ const tcpLayout = { preamble: 0, length: 4, payload: 8, checksumBytes: 4 };
 const maxTcpFrameBytes = 1280;
 const recordCount = 1;
 
+/**
+ * Frame admission failed; the fixed category keeps wire bytes out of error output.
+ */
 export class FrameError extends Error {
   constructor() {
     super("invalid-frame");
   }
 }
 
-// Buffer.from can share a pool's backing ArrayBuffer with other copies.
-// Dedicated storage prevents a caller's .buffer view from reaching private bytes.
+/**
+ * Copies into dedicated backing storage; a caller’s .buffer view cannot reach
+ * private bytes through Node’s shared Buffer pool.
+ */
 function isolatedCopy(bytes: Buffer): Buffer {
   const copy = Buffer.alloc(bytes.length);
   bytes.copy(copy);
   return copy;
 }
 
-// Raw Extended admission walks every group, bounding reads before using lengths.
-// This validates IO structure as well as the envelope before transport snapshots it.
+/**
+ * Checks Extended IO shape up to the exclusive repeated-count offset.
+ * Bounds every read, requires distinct IDs and exact total/byte consumption, and
+ * throws FrameError for malformed or out-of-profile groups; GPS scalars are not decoded.
+ */
 function validateExtendedIo(bytes: Buffer, end: number): void {
   let offset = 38;
   const ids = new Set<number>();
+
+  /** Reads one big-endian field or fails before touching bytes beyond the IO body. */
   function take16(): number {
     if (offset + 2 > end) throw new FrameError();
     const value = bytes.readUInt16BE(offset);
@@ -166,10 +194,17 @@ function validateExtendedIo(bytes: Buffer, end: number): void {
     throw new FrameError();
 }
 
+/**
+ * Owns detached single-record bytes and their ACK count as one immutable runtime brand.
+ * Codec 8 admission checks envelope/count/CRC; Extended admission also checks IO
+ * structure. Neither factory is a complete semantic decoder or authenticates a peer.
+ * Snapshots are copies, so transport cannot observe subsequent caller mutations.
+ */
 export class Codec8Frame {
   readonly #bytes: Buffer;
   readonly #recordCount: number;
 
+  /** Copies and admits only the selected codec within the 1280-byte TCP profile. */
   private constructor(input: Buffer, codec = 8) {
     const minimumBytes =
       tcpLayout.payload +
@@ -201,21 +236,31 @@ export class Codec8Frame {
     Object.freeze(this);
   }
 
+  /** Admits a Codec 8 envelope only; rejects Extended and malformed count/CRC fields. */
   static fromBytes(bytes: Buffer): Codec8Frame {
     return new Codec8Frame(bytes);
   }
+
+  /** Admits Codec 8E only, including bounded fixed/NX group structure. */
   static fromExtendedBytes(bytes: Buffer): Codec8Frame {
     return new Codec8Frame(bytes, 0x8e);
   }
+
+  /** Validates and encodes the original Codec 8 record contract into owned bytes. */
   static fromRecord(value: unknown): Codec8Frame {
     return new Codec8Frame(encodeCodec8(value));
   }
+
+  /** Returns the admitted repeated AVL count used to match a four-byte ACK. */
   get recordCount(): number {
     return this.#recordCount;
   }
 
-  // Private fields establish the runtime brand, so forged metadata and virtual
-  // snapshot methods cannot alter the bytes and count consumed by transport.
+  /**
+   * Returns detached bytes and their private count; raw Buffers first undergo codec admission.
+   * Checks private branding directly so forged metadata or virtual overrides cannot
+   * change what transport sends or acknowledges. Invalid inputs throw FrameError.
+   */
   static snapshot(value: Codec8Frame | Buffer) {
     const frame = Buffer.isBuffer(value)
       ? new Codec8Frame(value, value[8] === 0x8e ? 0x8e : 8)
@@ -228,11 +273,17 @@ export class Codec8Frame {
     };
   }
 
+  /** Returns a mutable copy whose backing storage cannot reach this frame’s bytes. */
   snapshot() {
     return Codec8Frame.snapshot(this);
   }
 }
 
+/**
+ * Validates a Codec 8 record and encodes one AVL data field, without a TCP envelope.
+ * Derives both counts and groups IO by width, preserving order within each group.
+ * Throws RecordError before payload allocation for invalid schema or u64 overflow.
+ */
 export function encodeCodec8Payload(value: unknown): Buffer {
   if (!valid(value)) throw new RecordError();
   const timestamp = BigInt(value.timestampMs);
@@ -264,11 +315,16 @@ export function encodeCodec8Payload(value: unknown): Buffer {
       offset += payload.write(hex, offset, width, "hex");
     }
   }
+
   // The protocol repeats the count after the records, inside CRC coverage.
   payload[offset] = recordCount;
   return payload;
 }
 
+/**
+ * Wraps one validated Codec 8 payload in a zero-preamble TCP envelope with CRC-16/ARC.
+ * Returns fresh bytes; RecordError denotes invalid record input, not a transport failure.
+ */
 export function encodeCodec8(value: unknown): Buffer {
   const payload = encodeCodec8Payload(value);
   const frame = Buffer.alloc(

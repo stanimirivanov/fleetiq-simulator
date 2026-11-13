@@ -42,3 +42,12 @@ A merged correction is not proof of external ruleset or hardware qualification.
 - **Corrective control:** Check actual `node --version` and `pnpm --version` against package metadata before citing results. Restore the pinned tools outside the source tree and rerun verification; discard the preliminary pass as evidence for the pinned runtime.
 - **Evidence:** [Issue #33](https://github.com/stanimirivanov/fleetiq-simulator/issues/33) and the runtime-version item in the [PR checklist](../.github/pull_request_template.md).
 - **Status:** Detected 2026-11-12 during HR-PR4. Pinned rerun qualification is recorded in the PR verification results. This manual control does not claim automated local runtime enforcement.
+
+
+## HF-005: Source documentation escaped the tooling-only comment gate
+
+- **Symptom:** Merged Codec 8/8E exports and other source contracts lacked declaration documentation while canonical lint passed.
+- **Root cause:** ESLint selected only `tools/**/*.mjs`; TypeScript source had no matching parser/configuration. Scoped guides described invariants without an enforceable declaration policy.
+- **Corrective control:** Add a pinned TypeScript parser, explicit source declaration contexts, descriptive-summary and comment-spacing checks. Route the new source gate through existing fast/canonical validation; document all five source modules and retain semantic review.
+- **Evidence:** [Issue #45](https://github.com/stanimirivanov/fleetiq-simulator/issues/45), ignored-source RED fixtures and passing/failing declaration controls in [tests/comments.test.mjs](../tests/comments.test.mjs).
+- **Status:** Local correction under review. Lint cannot determine whether prose is accurate or useful; no external ruleset qualification is implied.

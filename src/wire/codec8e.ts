@@ -8,8 +8,18 @@ import {
   recordSchema,
 } from "./codec8.ts";
 
+/**
+ * Codec 8 Extended input: event/fixed IO IDs widen to u16 and NX stays a separate list.
+ * Combined IO is limited to 64 unique IDs; variable hex is 1–256 bytes, even when
+ * its length matches a fixed group. Scalar units and exact timestamps match Record8.
+ */
 export type Record8E = Record8 & { variableIo: { id: number; hex: string }[] };
 const u16 = { type: "integer", minimum: 0, maximum: 65535 } as const;
+
+/**
+ * Closed Extended schema reusing Codec 8 scalar fields and widening IO identifiers.
+ * The encoder additionally enforces combined uniqueness/count and the TCP byte cap.
+ */
 export const extendedRecordSchema = {
   ...recordSchema,
   properties: {
@@ -46,8 +56,12 @@ const valid = new Ajv2020({ ownProperties: true }).compile<Record8E>(
   extendedRecordSchema,
 );
 
-// Codec 8E retains the GPS header but widens all IO IDs and group counts.
-// NX entries remain distinct even when their lengths match a fixed-width group.
+/**
+ * Encodes one Codec 8E TCP frame with two-byte IO IDs/counts and separate NX values.
+ * Preserves raw fixed widths and within-group order; short NX values never move to
+ * a fixed group. Throws RecordError for schema/profile violations before allocating
+ * wire buffers, including combined-count, duplicate-ID, u64 and 1280-byte limits.
+ */
 export function encodeCodec8e(value: unknown): Buffer {
   if (!valid(value)) throw new RecordError();
   const entries = [...value.io, ...value.variableIo];
@@ -62,6 +76,7 @@ export function encodeCodec8e(value: unknown): Buffer {
     size + 12 > 1280
   )
     throw new RecordError();
+
   // Reuse only the unchanged timestamp/GPS header, with an empty Codec 8 IO body.
   const { variableIo: _variableIo, ...base } = value;
   const header = encodeCodec8Payload({ ...base, eventId: 0, io: [] });
@@ -97,7 +112,11 @@ export function encodeCodec8e(value: unknown): Buffer {
   return frame;
 }
 
-// An absent selector preserves the original closed Codec 8 record contract.
+/**
+ * Dispatches CLI record JSON by an own codec selector without mutating the input.
+ * Absent or "8" preserves the original closed Codec 8 contract; "8e" requires the
+ * Extended contract. Unknown selectors and cross-codec fields throw RecordError.
+ */
 export function encodeAvlRecord(value: unknown): Buffer {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new RecordError();

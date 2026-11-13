@@ -15,6 +15,9 @@ import {
 } from "../session/state.ts";
 import { Codec8Frame, FrameError } from "../wire/codec8.ts";
 
+/**
+ * Injectable all-address IPv4 lookup; admission must consider every answer before connecting.
+ */
 type ComposeResolver = (
   host: string,
   done: (error: Error | null, addresses?: readonly LookupAddress[]) => void,
@@ -57,6 +60,11 @@ export function composeLookup(
   };
 }
 
+/**
+ * Writes one request and accumulates exactly one login byte or four ACK bytes.
+ * Rejects stale buffered bytes, surplus replies, closure and expiry without logging
+ * peer data. Scope interruption removes listeners; the enclosing scope owns the socket.
+ */
 function readReply(
   socket: Socket,
   bytes: Buffer,
@@ -69,6 +77,7 @@ function readReply(
       resume(Effect.fail(new SessionError("connection-closed")));
       return;
     }
+
     // Buffered bytes predate this request, so they cannot acknowledge it.
     if (socket.readableLength !== 0) {
       resume(Effect.fail(new SessionError("unexpected-reply")));
@@ -88,6 +97,8 @@ function readReply(
     };
     const closed = () =>
       finish(Effect.fail(new SessionError("connection-closed")));
+
+    /** Consumes only the outstanding reply size and checks the monotonic deadline first. */
     const readable = () => {
       if (expired()) {
         finish(Effect.fail(timeout));
@@ -111,6 +122,9 @@ function readReply(
   });
 }
 
+/**
+ * Lifts expected policy failures into Effect’s typed channel; programming defects stay defects.
+ */
 function remainingBudget(limits: SessionLimits, at?: number) {
   return Effect.try({
     try: () => limits.remaining(at),
@@ -121,6 +135,11 @@ function remainingBudget(limits: SessionLimits, at?: number) {
   });
 }
 
+/**
+ * Bounds one request/reply by the smaller of per-exchange and whole-run budgets.
+ * Uses monotonic checks as well as an Effect timeout so delayed event handling cannot
+ * accept a late reply; failure categories distinguish login, ACK and run expiry.
+ */
 function exchange(
   socket: Socket,
   bytes: Buffer,
@@ -154,6 +173,11 @@ function exchange(
   });
 }
 
+/**
+ * Acquires a scoped TCP socket and waits for closure during release, including interruption.
+ * The Compose target resolves once to an admitted numeric IPv4 address; literal
+ * loopback targets bypass DNS. Socket errors never expose endpoints through output.
+ */
 function openSocket({ host, port }: SessionOptions) {
   return Effect.acquireRelease(
     Effect.sync(() => {
@@ -167,6 +191,7 @@ function openSocket({ host, port }: SessionOptions) {
           : {}),
       };
       const socket = createConnection(address);
+
       // The close event reports transport failure without exposing endpoints.
       socket.on("error", () => {});
       const closed = new Promise<void>((resolve) =>
@@ -183,9 +208,16 @@ function openSocket({ host, port }: SessionOptions) {
 }
 
 // A run is bounded to sixteen batches. Wire owns the independent per-frame
-// byte limit and currently admits exactly one record in each Codec 8 frame.
+// byte limit and currently admits exactly one record in each Codec 8/8E frame.
 const maxBatches = 16;
 
+/**
+ * Sends 1–16 wire-owned frame snapshots after an accepted private-identity login.
+ * Advances its cursor only after an exact count ACK and closes the scope before
+ * retrying frozen bytes. Strict mode retires each successful socket; compliant-peer
+ * mode may reuse it. ACK loss can duplicate remote acceptance. Returns local ACK
+ * counts or throws SessionError; unexpected Effect defects remain internal failures.
+ */
 export async function sendBatches(
   frames: readonly (Buffer | Codec8Frame)[],
   options: SessionOptions,
