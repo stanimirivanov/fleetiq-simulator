@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { encodeCodec8 } from "../src/wire/codec8.ts";
+import { encodeCodec8e } from "../src/wire/codec8e.ts";
 import { generatedCorpus } from "../tests/codec8-corpus.ts";
 import { singleRecordVectors } from "../tests/codec8-vectors.ts";
+import { extended, variableRecord } from "../tests/codec8e-fixture.ts";
 
 /** @type {{repository: string, revision: string, rustToolchain: string}} */
 export const pin = JSON.parse(
@@ -68,20 +70,24 @@ export function verifyCheckout(root) {
 /** Serializes every transmitted field without converting u64 timestamps to Number.
  * The platform's narrower profile is asserted as an exact rejection, not skipped.
  * @param {Omit<import("../src/wire/codec8.ts").Record8, "schemaVersion">} record
+ * @param {number} [codec]
+ * @param {{id: number, hex: string}[]} [variableIo]
  */
-function expectedLine(record) {
+function expectedLine(record, codec = 8, variableIo = []) {
   if (
     BigInt(record.timestampMs) > 9223372036854775807n ||
     new Set(record.io.map((value) => value.id)).size !== record.io.length
   )
     return "reject:1";
-  const io = [...record.io]
-    .sort((a, b) => a.hex.length - b.hex.length)
+  const io = [
+    ...[...record.io].sort((a, b) => a.hex.length - b.hex.length),
+    ...variableIo,
+  ]
     .map((value) => `${value.id}:${value.hex.toLowerCase()}`)
     .join(",");
   return [
     "ok",
-    8,
+    codec,
     1,
     record.timestampMs,
     record.priority,
@@ -125,6 +131,29 @@ export function platformCases() {
   const corrupted = Buffer.from(base.frame, "hex");
   corrupted[corrupted.length - 1] = (corrupted[corrupted.length - 1] ?? 0) ^ 1;
   return [
+    ...[
+      extended,
+      variableRecord,
+      { ...variableRecord, variableIo: [{ id: 65535, hex: "00" }] },
+      { ...extended, io: [], variableIo: [] },
+      {
+        ...variableRecord,
+        timestampMs: "9223372036854775807",
+        variableIo: [{ id: 65535, hex: "00".repeat(256) }],
+      },
+      {
+        ...extended,
+        io: Array.from({ length: 64 }, (_, id) => ({
+          id: id + 256,
+          hex: "01",
+        })),
+        variableIo: [],
+      },
+      { ...extended, timestampMs: "18446744073709551615" },
+    ].map((record) => ({
+      hex: encodeCodec8e(record).toString("hex"),
+      expected: expectedLine(record, 0x8e, record.variableIo),
+    })),
     ...vectors,
     ...generated,
     ...boundaries,

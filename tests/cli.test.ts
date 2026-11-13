@@ -540,3 +540,71 @@ test("CLI schema admits the precise Compose name while keeping arbitrary destina
       false,
     );
 });
+
+test("Extended CLI validates, encodes and sends the exact NX frame with one ACK", {
+  timeout: 3000,
+}, async () => {
+  const { variableRecord, variableFrame } = await import(
+    "./codec8e-fixture.ts"
+  );
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-extended-"));
+  try {
+    const input = join(directory, "record.json");
+    const output = join(directory, "frame.bin");
+    const config = join(directory, "run.json");
+    const record = { ...variableRecord, codec: "8e" };
+    writeFileSync(input, JSON.stringify(record));
+    writeFileSync(
+      join(directory, "identity.json"),
+      JSON.stringify({ "sim-a": identity }),
+      { mode: 0o600 },
+    );
+    assert.equal(
+      runCli(["validate", "--config", input], () => {}),
+      0,
+    );
+    assert.equal(
+      runCli(["encode", "--config", input, "--output", output], () => {}),
+      0,
+    );
+    assert.equal(readFileSync(output).toString("hex"), variableFrame);
+    await withPeer(
+      async (socket) => {
+        const read = await login(socket);
+        socket.write(Buffer.from([1]));
+        assert.equal(
+          (await read(variableFrame.length / 2)).toString("hex"),
+          variableFrame,
+        );
+        socket.end(ack);
+      },
+      async (port) => {
+        writeFileSync(
+          config,
+          JSON.stringify({
+            schemaVersion: 1,
+            deviceId: "sim-a",
+            identityFile: "identity.json",
+            target: { transport: "tcp", host: "127.0.0.1", port },
+            record,
+          }),
+        );
+        const messages: string[] = [];
+        assert.equal(
+          await runTcp(
+            ["run", "--config", config],
+            (line) => messages.push(line),
+            new AbortController().signal,
+            (receipt) => messages.push(JSON.stringify(receipt)),
+          ),
+          0,
+        );
+        assert.deepEqual(messages, [
+          '{"status":"acknowledged","recordCount":1}',
+        ]);
+      },
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

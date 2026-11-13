@@ -15,7 +15,8 @@ import {
   defaultTarget,
   SessionError,
 } from "./session/state.ts";
-import { Codec8Frame, encodeCodec8, RecordError } from "./wire/codec8.ts";
+import { Codec8Frame, RecordError } from "./wire/codec8.ts";
+import { encodeAvlRecord } from "./wire/codec8e.ts";
 
 const maxInput = 16 * 1024;
 
@@ -150,7 +151,7 @@ export function run(
   }
   let frame: Buffer;
   try {
-    frame = encodeCodec8(readInput(input));
+    frame = encodeAvlRecord(readInput(input));
   } catch (error) {
     return reportFailure(error, report);
   }
@@ -240,7 +241,11 @@ export async function runTcp(
     if (!validRunConfig(config)) {
       throw new InputError("invalid-run-config");
     }
-    const frame = Codec8Frame.fromRecord(config.record);
+    const bytes = encodeAvlRecord(config.record);
+    const frame =
+      bytes[8] === 0x8e
+        ? Codec8Frame.fromExtendedBytes(bytes)
+        : Codec8Frame.fromBytes(bytes);
     let identity: string;
     try {
       const identities = readInput(
