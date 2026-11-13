@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "identityFile": "private-identities.json",
+  "deviceId": "sim-a",
+  "target": { "transport": "tcp", "host": "127.0.0.1", "port": 55027 },
+  "retry": {
+    "ackDeadlineMs": 30000,
+    "totalDeadlineMs": 600000,
+    "maxAttempts": 5
+  },
+  "playback": {
+    "routeFile": "private-route.json",
+    "scenarioFile": "private-scenario.json",
+    "profileFile": "private-profile.json",
+    "stateDirectory": "private-state",
+    "intervalMs": 10000,
+    "sendIntervalMs": 30000,
+    "on": ["ignition", "stop", "movement"],
+    "offlineUntilMs": 120000,
+    "timingProfile": "accelerated",
+    "maxRecords": 16,
+    "maxFrameBytes": 1280,
+    "maxQueuedRecords": 1000,
+    "maxQueuedBytes": 16777216,
+    "maxAgeMs": 86400000
+  }
+}

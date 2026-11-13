@@ -35,12 +35,24 @@ export const groups = [
   },
   {
     name: "session",
-    tests: ["tests/tcp.test.ts", "tests/batches.test.ts"],
+    tests: [
+      "tests/tcp.test.ts",
+      "tests/batches.test.ts",
+      "tests/spool.test.ts",
+    ],
     sources: [
       "src/session/state.ts",
       "src/transport/tcp.ts",
       "src/session/batches.ts",
+      "src/session/spool.ts",
     ],
+    lines: 90,
+    branches: 85,
+  },
+  {
+    name: "storage",
+    tests: ["tests/storage.test.ts"],
+    sources: ["src/storage/spool.ts"],
     lines: 90,
     branches: 85,
   },

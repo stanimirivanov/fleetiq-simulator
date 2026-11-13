@@ -8,6 +8,8 @@ paths, endpoints or wire bytes.
 
 `scenarios/` owns deterministic kinematics and model IO, depending only on its
 own modules, wire types and Ajv. It reads no files, clocks or network state.
+`storage/` owns private checkpoint files and kernel-backed locking behind the
+session persistence port. Session validates checkpoint state without filesystem imports.
 `wire/` owns record validation and bytes. `session/` owns policy and
 `transport/` owns handshake and delivery. The CLI composes them. Use explicit relative `.ts` imports so
 Node and the build agree. New top-level source owners require a reviewed

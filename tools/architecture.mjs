@@ -7,11 +7,12 @@ import { reviewedPath } from "./diagnostic-location.mjs";
 import { wireAmbient } from "./wire-ambient.mjs";
 
 const layers = {
-  cli: ["session", "wire", "transport", "scenarios"],
+  cli: ["session", "wire", "transport", "scenarios", "storage"],
   transport: ["transport", "session", "wire"],
   session: ["session", "wire"],
   wire: ["wire"],
   scenarios: ["scenarios", "wire"],
+  storage: ["storage", "session"],
 };
 
 const remedies = {
@@ -61,7 +62,8 @@ function owner(file) {
     first === "wire" ||
     first === "session" ||
     first === "transport" ||
-    first === "scenarios"
+    first === "scenarios" ||
+    first === "storage"
   )
     return first;
 }
@@ -73,13 +75,22 @@ function owner(file) {
  * @param {string} name
  */
 function allowedExternal(layer, name) {
+  if (layer === "storage")
+    return ["node:fs", "node:crypto", "node:sqlite"].includes(name);
+  if (layer === "session") return name === "ajv/dist/2020.js";
   if (layer === "transport")
     return ["node:net", "node:dns", "effect"].includes(name);
   if (layer === "wire" || layer === "scenarios")
     return name === "ajv/dist/2020.js";
   return (
     layer === "cli" &&
-    ["node:fs", "node:path", "node:url", "ajv/dist/2020.js"].includes(name)
+    [
+      "node:fs",
+      "node:path",
+      "node:url",
+      "node:crypto",
+      "ajv/dist/2020.js",
+    ].includes(name)
   );
 }
 

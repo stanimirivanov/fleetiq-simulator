@@ -210,4 +210,12 @@ Codec 8E records and assembles FIFO packets under record/byte limits, retaining
 pending records until explicit acknowledgement. `createClock(1)` maps real-time
 elapsed milliseconds; scales 2–1000 explicitly accelerate virtual simulation.
 See [the API contracts and composition](docs/capture-batching.md). The CLI still
-accepts its existing single-record config; durable run/spool integration is SIM-PR11.
+accepts its existing single-record config; durable run/spool integration is described in [offline recovery](docs/offline-recovery.md).
+
+## Durable offline recovery (SIM-PR11)
+
+`run` and `resume` accept a private accelerated playback config with bounded
+checkpointing, frozen pending packets and atomic ACK/cursor commits. See the
+[run template](scenarios/offline.json) and [recovery contract](docs/offline-recovery.md).
+Existing single-record CLI configs stay compatible. Recovery may repeat remote
+acceptance after an uncertain ACK; it does not claim exactly-once delivery.

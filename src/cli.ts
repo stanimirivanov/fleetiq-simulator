@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   closeSync,
   constants,
@@ -6,17 +7,23 @@ import {
   readSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
+import { capture } from "./scenarios/capture.ts";
+import { ProfileError } from "./scenarios/profile.ts";
+import { createPlayback, ScenarioError } from "./scenarios/route.ts";
+import { BatchQueue } from "./session/batches.ts";
+import { DurableSpool, SpoolError } from "./session/spool.ts";
 import {
   type ConnectionPolicy,
   type DeliveryReceipt,
   defaultTarget,
   SessionError,
+  sessionLimits,
 } from "./session/state.ts";
 import { Codec8Frame, RecordError } from "./wire/codec8.ts";
-import { encodeAvlRecord } from "./wire/codec8e.ts";
+import { encodeAvlRecord, encodeCodec8e } from "./wire/codec8e.ts";
 
 const maxInput = 16 * 1024;
 
@@ -79,6 +86,18 @@ function reportFailure(
     report(error.category);
     return 2;
   }
+  if (error instanceof SpoolError) {
+    report(error.category);
+    return 4;
+  }
+  if (error instanceof ScenarioError) {
+    report("invalid-scenario");
+    return 2;
+  }
+  if (error instanceof ProfileError) {
+    report("invalid-profile");
+    return 2;
+  }
   if (error instanceof RecordError) {
     report("invalid-record");
     return 2;
@@ -93,12 +112,16 @@ function reportFailure(
 }
 
 /**
- * Reads at most 16 KiB of strict UTF-8 JSON from a regular, non-symlink file.
+ * Reads bounded strict UTF-8 JSON from a regular, non-symlink file (16 KiB by default).
  * Private identity files additionally require current-user ownership and no group/other
  * permissions. Always attempts descriptor cleanup; expected file/JSON failures
  * become InputError while programming defects propagate.
  */
-function readInput(path: string, privateFile = false): unknown {
+function readInput(
+  path: string,
+  privateFile: boolean | "spool" = false,
+  limit = maxInput,
+): unknown {
   const fd = fileOperation(
     () =>
       openSync(
@@ -112,12 +135,14 @@ function readInput(path: string, privateFile = false): unknown {
     if (!stat.isFile()) throw new InputError("invalid-input-file");
     if (
       privateFile &&
-      ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.())
+      ((stat.mode & 0o077) !== 0 ||
+        stat.uid !== process.getuid?.() ||
+        (privateFile === "spool" && stat.nlink !== 1))
     ) {
       throw new InputError("invalid-identity-file");
     }
-    if (stat.size > maxInput) throw new InputError("input-too-large");
-    const buffer = Buffer.alloc(maxInput + 1);
+    if (stat.size > limit) throw new InputError("input-too-large");
+    const buffer = Buffer.alloc(limit + 1);
     let offset = 0;
     while (offset < buffer.length) {
       const read = fileOperation(
@@ -127,7 +152,7 @@ function readInput(path: string, privateFile = false): unknown {
       if (read === 0) break;
       offset += read;
     }
-    if (offset > maxInput) throw new InputError("input-too-large");
+    if (offset > limit) throw new InputError("input-too-large");
     try {
       return JSON.parse(
         new TextDecoder("utf-8", { fatal: true }).decode(
@@ -176,7 +201,18 @@ export function run(
   }
   let frame: Buffer;
   try {
-    frame = encodeAvlRecord(readInput(input));
+    const value = readInput(input);
+    if (command === "validate" && validPlaybackConfig(value)) {
+      const pinned = openPlaybackRoot(input, value);
+      try {
+        readIdentity(value, pinned.root, true);
+        loadPlayback(value, pinned.root);
+        return 0;
+      } finally {
+        pinned.close();
+      }
+    }
+    frame = encodeAvlRecord(value);
   } catch (error) {
     return reportFailure(error, report);
   }
@@ -260,9 +296,308 @@ const validRunConfig = new Ajv2020({ ownProperties: true }).compile<RunConfig>(
   runConfigSchema,
 );
 
+/** Accelerated playback inputs are sibling private files; queue state lives in a dedicated directory. */
+export type PlaybackRunConfig = Omit<RunConfig, "record"> & {
+  playback: {
+    routeFile: string;
+    scenarioFile: string;
+    profileFile: string;
+    stateDirectory: string;
+    intervalMs: number;
+    sendIntervalMs: number;
+    on: ("ignition" | "movement" | "stop")[];
+    offlineUntilMs: number;
+    timingProfile: "accelerated";
+    maxRecords: number;
+    maxFrameBytes: number;
+    maxQueuedRecords: number;
+    maxQueuedBytes: number;
+    maxAgeMs: number;
+  };
+};
+const { record: _record, ...commonRunProperties } = runConfigSchema.properties;
+const filename = runConfigSchema.properties.identityFile;
+const playbackKeys = [
+  "routeFile",
+  "scenarioFile",
+  "profileFile",
+  "stateDirectory",
+  "intervalMs",
+  "sendIntervalMs",
+  "on",
+  "offlineUntilMs",
+  "timingProfile",
+  "maxRecords",
+  "maxFrameBytes",
+  "maxQueuedRecords",
+  "maxQueuedBytes",
+  "maxAgeMs",
+];
+const validPlaybackConfig = new Ajv2020({
+  ownProperties: true,
+}).compile<PlaybackRunConfig>({
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "identityFile", "deviceId", "playback"],
+  properties: {
+    ...commonRunProperties,
+    playback: {
+      type: "object",
+      additionalProperties: false,
+      required: playbackKeys,
+      properties: {
+        routeFile: filename,
+        scenarioFile: filename,
+        profileFile: filename,
+        stateDirectory: filename,
+        intervalMs: integer,
+        sendIntervalMs: integer,
+        on: {
+          type: "array",
+          maxItems: 3,
+          uniqueItems: true,
+          items: { enum: ["ignition", "movement", "stop"] },
+        },
+        offlineUntilMs: integer,
+        timingProfile: { const: "accelerated" },
+        maxRecords: integer,
+        maxFrameBytes: integer,
+        maxQueuedRecords: integer,
+        maxQueuedBytes: integer,
+        maxAgeMs: integer,
+      },
+    },
+  },
+});
+
+/** Selects a validated mode and preserves legacy record-before-identity validation order. */
+function selectRun(value: unknown) {
+  if (validRunConfig(value)) {
+    const bytes = encodeAvlRecord(value.record);
+    return {
+      kind: "record" as const,
+      config: value,
+      frame:
+        bytes[8] === 0x8e
+          ? Codec8Frame.fromExtendedBytes(bytes)
+          : Codec8Frame.fromBytes(bytes),
+    };
+  }
+  if (validPlaybackConfig(value))
+    return { kind: "playback" as const, config: value };
+  throw new InputError("invalid-run-config");
+}
+
+/** Hashes normalized JSON inputs; only digests enter private checkpoint binding, never public receipts. */
+function digest(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+/** Pins and verifies one private input directory so later sibling reads cannot follow a replaced parent. */
+function openPlaybackRoot(path: string, config: PlaybackRunConfig) {
+  const fd = fileOperation(
+    () =>
+      openSync(
+        dirname(resolve(path)),
+        constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+      ),
+    "input-unavailable",
+  );
+  try {
+    const stat = fstatSync(fd);
+    if (stat.uid !== process.getuid?.() || (stat.mode & 0o777) !== 0o700)
+      throw new InputError("invalid-input-file");
+    const root = `/proc/self/fd/${fd}`;
+    if (
+      digest(readInput(resolve(root, basename(path)), "spool")) !==
+      digest(config)
+    )
+      throw new InputError("invalid-run-config");
+    return { root, close: () => closeSync(fd) };
+  } catch (error) {
+    closeSync(fd);
+    throw error;
+  }
+}
+
+/** Reads one private device identity and preserves fixed-category classification for expected file failures. */
+function readIdentity(
+  config: Pick<RunConfig, "identityFile" | "deviceId">,
+  root: string,
+  strict = false,
+): string {
+  try {
+    const identities = readInput(
+      resolve(root, config.identityFile),
+      strict ? "spool" : true,
+    );
+    if (
+      identities === null ||
+      typeof identities !== "object" ||
+      Array.isArray(identities) ||
+      Object.keys(identities).length !== 1 ||
+      !Object.hasOwn(identities, config.deviceId)
+    )
+      throw new InputError("invalid-identity-file");
+    const value = (identities as Record<string, unknown>)[config.deviceId];
+    if (
+      typeof value !== "string" ||
+      value.length !== 15 ||
+      /[^0-9]/u.test(value)
+    )
+      throw new InputError("invalid-identity-file");
+    return value;
+  } catch (error) {
+    if (error instanceof InputError)
+      throw new InputError("invalid-identity-file");
+    throw error;
+  }
+}
+
+/** Validates private playback inputs and queue policy without creating state or loading transport. */
+function loadPlayback(config: PlaybackRunConfig, root: string) {
+  const p = config.playback;
+  const scenario = readInput(
+    resolve(root, p.scenarioFile),
+    "spool",
+    1024 * 1024,
+  );
+  const route = readInput(resolve(root, p.routeFile), "spool", 8 * 1024 * 1024);
+  const profile = readInput(resolve(root, p.profileFile), "spool");
+  const playback = createPlayback(route, scenario, profile);
+  if (
+    !Number.isSafeInteger(p.offlineUntilMs) ||
+    p.offlineUntilMs < 0 ||
+    p.offlineUntilMs > playback.durationMs
+  )
+    throw new InputError("invalid-run-config");
+  const work = [
+    ...capture(playback, {
+      intervalMs: p.intervalMs,
+      sendIntervalMs: p.sendIntervalMs,
+      on: p.on,
+    }),
+  ].map((tick) => ({
+    atMs: tick.atMs,
+    frame:
+      tick.type === "capture"
+        ? Codec8Frame.fromExtendedBytes(encodeCodec8e(tick.record))
+        : null,
+  }));
+  new BatchQueue(p);
+  if (
+    !Number.isSafeInteger(p.maxAgeMs) ||
+    p.maxAgeMs < 1 ||
+    p.maxAgeMs > 604800000 ||
+    p.maxQueuedBytes < 4096
+  )
+    throw new InputError("invalid-run-config");
+  return { work, scenario, route, profile };
+}
+
+/**
+ * Runs bounded accelerated capture with durable-before-send and ACK-before-removal ordering.
+ * Reconstructs the same schedule on resume and keeps real session deadlines separate.
+ * Expected network outages retain capture; unexpected defects and storage failures stop the run.
+ */
+async function runPlayback(
+  config: PlaybackRunConfig,
+  root: string,
+  identity: string,
+  resume: boolean,
+  signal: AbortSignal,
+  perform: typeof import("./transport/tcp.ts").sendBatches,
+  acknowledge: (receipt: DeliveryReceipt) => void,
+): Promise<number> {
+  const p = config.playback;
+  const { work, scenario, route, profile } = loadPlayback(config, root);
+  const binding = {
+    config: digest(config),
+    scenario: digest(scenario),
+    route: digest(route),
+    profile: digest(profile),
+    identity: digest(identity),
+    schedule: digest(
+      work.map((item) => ({
+        atMs: item.atMs,
+        hex: item.frame?.snapshot().bytes.toString("hex") ?? null,
+      })),
+    ),
+  };
+  const options = {
+    host: config.target?.host ?? defaultTarget.host,
+    port: config.target?.port ?? defaultTarget.port,
+    ...config.retry,
+    connectionPolicy: config.connectionPolicy,
+    identity,
+    signal,
+  };
+  const budget = sessionLimits(options);
+  const { FileStore } = await import("./storage/spool.ts");
+  const store = new FileStore(resolve(root, p.stateDirectory));
+  try {
+    const spool = new DurableSpool(store, binding, work, p, resume);
+    let last: SessionError | undefined;
+    let blocked = false;
+
+    /** A failing count/refusal blocks further sends this run; ordinary outage may retry at the next send tick. */
+    async function drain(): Promise<void> {
+      for (let frame = spool.prepare(); frame; frame = spool.prepare()) {
+        try {
+          await perform([frame], {
+            ...options,
+            totalDeadlineMs: Math.ceil(budget.remaining()),
+          });
+          spool.acknowledge(frame);
+        } catch (error) {
+          if (
+            !(error instanceof SessionError) ||
+            error.category === "cancelled" ||
+            error.category === "run-timeout" ||
+            error.category === "invalid-session"
+          )
+            throw error;
+          last = error;
+          blocked = ["login-refused", "ack-count", "unexpected-reply"].includes(
+            error.category,
+          );
+          return;
+        }
+      }
+    }
+
+    try {
+      if (resume && spool.stats.atMs >= p.offlineUntilMs) await drain();
+      while (spool.stats.cursor < work.length) {
+        if (signal.aborted) throw new SessionError("cancelled");
+        budget.remaining();
+        const send = spool.advance();
+        if (send && spool.stats.atMs >= p.offlineUntilMs && !blocked)
+          await drain();
+        await new Promise<void>((done) => setImmediate(done));
+      }
+      if (signal.aborted) throw new SessionError("cancelled");
+      if (spool.stats.queued)
+        throw last ?? new SessionError("connection-closed");
+      acknowledge({
+        status: "acknowledged",
+        recordCount: spool.stats.acknowledged,
+      });
+      return 0;
+    } catch (error) {
+      if (error instanceof SessionError && error.category === "cancelled")
+        spool.cancel();
+      throw error;
+    }
+  } finally {
+    store.close();
+  }
+}
+
 /**
  * Validates run config, record and private identity before lazily loading transport.
- * Sends one frame under the caller’s cancellation signal and calls acknowledge only
+ * Preserves the legacy single-record mode or runs durable accelerated playback.
+ * Calls acknowledge only
  * after a matching wire ACK. Returns a CLI exit code and reports fixed categories;
  * no receipt asserts downstream projection or browser acceptance.
  */
@@ -278,54 +613,45 @@ export async function runTcp(
     return 2;
   }
   try {
-    const config = readInput(path);
-    if (!validRunConfig(config)) {
+    const task = selectRun(readInput(path));
+    const config = task.config;
+    if (args[0] === "resume" && task.kind !== "playback")
       throw new InputError("invalid-run-config");
-    }
-    const bytes = encodeAvlRecord(config.record);
-    const frame =
-      bytes[8] === 0x8e
-        ? Codec8Frame.fromExtendedBytes(bytes)
-        : Codec8Frame.fromBytes(bytes);
-    let identity: string;
+    const inputRoot =
+      task.kind === "playback"
+        ? openPlaybackRoot(path, task.config)
+        : undefined;
     try {
-      const identities = readInput(
-        resolve(dirname(path), config.identityFile),
-        true,
+      const identity = readIdentity(
+        config,
+        inputRoot?.root ?? dirname(path),
+        Boolean(inputRoot),
       );
-      if (
-        identities === null ||
-        typeof identities !== "object" ||
-        Array.isArray(identities) ||
-        Object.keys(identities).length !== 1 ||
-        !Object.hasOwn(identities, config.deviceId)
-      )
-        throw new InputError("invalid-identity-file");
-      const value = (identities as Record<string, unknown>)[config.deviceId];
-      if (
-        typeof value !== "string" ||
-        value.length !== 15 ||
-        /[^0-9]/u.test(value)
-      )
-        throw new InputError("invalid-identity-file");
-      identity = value;
-    } catch (error) {
-      if (error instanceof InputError)
-        throw new InputError("invalid-identity-file");
-      throw error;
-    }
 
-    const { sendBatches } = await import("./transport/tcp.ts");
-    const receipt = await sendBatches([frame], {
-      host: config.target?.host ?? defaultTarget.host,
-      port: config.target?.port ?? defaultTarget.port,
-      ...config.retry,
-      connectionPolicy: config.connectionPolicy,
-      identity,
-      signal,
-    });
-    acknowledge(receipt);
-    return 0;
+      const { sendBatches } = await import("./transport/tcp.ts");
+      if (task.kind === "playback")
+        return await runPlayback(
+          task.config,
+          inputRoot?.root ?? dirname(path),
+          identity,
+          args[0] === "resume",
+          signal,
+          sendBatches,
+          acknowledge,
+        );
+      const receipt = await sendBatches([task.frame], {
+        host: config.target?.host ?? defaultTarget.host,
+        port: config.target?.port ?? defaultTarget.port,
+        ...config.retry,
+        connectionPolicy: config.connectionPolicy,
+        identity,
+        signal,
+      });
+      acknowledge(receipt);
+      return 0;
+    } finally {
+      inputRoot?.close();
+    }
   } catch (error) {
     return reportFailure(error, report);
   }
@@ -337,7 +663,7 @@ if (
 ) {
   const args = process.argv.slice(2);
   const report = (category: string) => process.stderr.write(`${category}\n`);
-  if (args[0] === "run") {
+  if (args[0] === "run" || args[0] === "resume") {
     const controller = new AbortController();
     const cancel = () => controller.abort();
     process.once("SIGINT", cancel);

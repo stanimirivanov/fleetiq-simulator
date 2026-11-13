@@ -113,6 +113,24 @@ try {
   assert.equal(code, 0);
   assert.equal(error, "");
   assert.equal(output, '{"status":"acknowledged","recordCount":1}\n');
+  const storageModule = "/app/dist/storage/spool.js";
+
+  /** @type {typeof import("../src/storage/spool.ts")} */
+  const { FileStore } = await import(storageModule);
+  const store = new FileStore(`${directory}/state`);
+  try {
+    store.write("image-storage-check");
+    assert.equal(store.read(), "image-storage-check");
+    assert.throws(() => new FileStore(`${directory}/state`), /spool-busy/);
+  } finally {
+    store.close();
+  }
+  const reopened = new FileStore(`${directory}/state`);
+  try {
+    assert.equal(reopened.read(), "image-storage-check");
+  } finally {
+    reopened.close();
+  }
   console.log("image-runtime-ok");
 } finally {
   server.close();

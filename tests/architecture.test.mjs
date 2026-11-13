@@ -197,3 +197,25 @@ test("scenarios depend only on pure scenario/wire contracts and the schema valid
   assert.match(invalid, /external-import/);
   assert.match(invalid, /wire-ambient/);
 });
+
+test("checkpoint storage owns file/SQLite effects while session depends only on a persistence port", () => {
+  assert.deepEqual(
+    checkArchitecture(
+      files({
+        "cli.ts": 'import "./storage/spool.ts";',
+        "storage/spool.ts":
+          'import "node:fs"; import "node:crypto"; import "node:sqlite"; export * from "../session/spool.ts";',
+        "session/spool.ts": 'import "ajv/dist/2020.js";',
+      }),
+    ),
+    [],
+  );
+  const bad = checkArchitecture(
+    files({
+      "session/spool.ts": 'import "node:fs"; import "../storage/spool.ts";',
+      "storage/spool.ts": "",
+    }),
+  ).join("\n");
+  assert.match(bad, /external-import/);
+  assert.match(bad, /layer-import/);
+});
