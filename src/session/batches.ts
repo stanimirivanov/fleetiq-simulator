@@ -1,5 +1,9 @@
 import { Codec8Frame } from "../wire/codec8.ts";
-import { combineCodec8e, encodeCodec8e } from "../wire/codec8e.ts";
+import {
+  codec8eFramingBytes,
+  combineCodec8e,
+  encodeCodec8e,
+} from "../wire/codec8e.ts";
 import { SessionError } from "./state.ts";
 
 /** Limits include the whole TCP envelope; queuedBytes conservatively counts single-record frames. */
@@ -69,15 +73,15 @@ export class BatchQueue {
   peek(): Codec8Frame | undefined {
     if (this.#pending) return this.#pending;
     const frames: Codec8Frame[] = [];
-    let bytes = 15;
+    let bytes = codec8eFramingBytes;
     for (const entry of this.#records) {
       if (
         frames.length === this.#limits.maxRecords ||
-        bytes + entry.size - 15 > this.#limits.maxFrameBytes
+        bytes + entry.size - codec8eFramingBytes > this.#limits.maxFrameBytes
       )
         break;
       frames.push(entry.frame);
-      bytes += entry.size - 15;
+      bytes += entry.size - codec8eFramingBytes;
     }
     if (frames.length) this.#pending = combineCodec8e(frames);
     return this.#pending;

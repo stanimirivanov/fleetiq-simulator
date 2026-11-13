@@ -128,6 +128,9 @@ export function encodeAvlRecord(value: unknown): Buffer {
   throw new RecordError();
 }
 
+/** TCP envelope plus codec/count bytes shared by all records in an Extended packet. */
+export const codec8eFramingBytes = 15;
+
 /** Assembles 1–16 admitted single-record Extended frames, deriving count, length and CRC.
  * Rejects mixed codecs, extra records or TCP frames over 1280 bytes before allocation.
  */
@@ -138,7 +141,9 @@ export function combineCodec8e(frames: readonly Codec8Frame[]): Codec8Frame {
       .snapshot()
       .bytes.subarray(10, -5),
   );
-  const size = 15 + records.reduce((sum, record) => sum + record.length, 0);
+  const size =
+    codec8eFramingBytes +
+    records.reduce((sum, record) => sum + record.length, 0);
   if (size > 1280) throw new RecordError();
   const bytes = Buffer.alloc(size);
   bytes.writeUInt32BE(size - 12, 4);
