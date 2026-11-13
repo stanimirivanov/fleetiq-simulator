@@ -335,8 +335,9 @@ The simulator admits u64 timestamps and duplicate IO IDs; this platform revision
 rejects timestamps above i64::MAX and duplicate IDs as Malformed (code 1).
 Those original cases remain explicit rejection checks, with additional signed
 timestamp boundary, duplicate-ID and checksum (code 4) controls. Current results:
-275 cases, 177 exact accepted records and 98 expected rejections, including
-Codec 8E and normal-day playback records. A deliberately
+277 cases, 179 accepted frames and 98 expected rejections, including
+Codec 8E, normal-day playback and 2/16-record packets. Every decoded record
+in a multi-record packet has its count, order and fields compared. A deliberately
 wrong expected result must fail the comparator during every real gate run.
 
 The adapter admits at most 512 lines, 2 MB input and 1280 bytes per frame.

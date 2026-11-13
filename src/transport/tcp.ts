@@ -208,7 +208,7 @@ function openSocket({ host, port }: SessionOptions) {
 }
 
 // A run is bounded to sixteen batches. Wire owns the independent per-frame
-// byte limit and currently admits exactly one record in each Codec 8/8E frame.
+// byte limit and admitted count (one Codec 8 record or up to sixteen Codec 8E records).
 const maxBatches = 16;
 
 /**

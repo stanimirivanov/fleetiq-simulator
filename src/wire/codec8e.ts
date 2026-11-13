@@ -1,5 +1,6 @@
 import { Ajv2020, type JSONSchemaType } from "ajv/dist/2020.js";
 import {
+  Codec8Frame,
   crc16Arc,
   encodeCodec8,
   encodeCodec8Payload,
@@ -125,4 +126,27 @@ export function encodeAvlRecord(value: unknown): Buffer {
   if (codec === "8e") return encodeCodec8e(record);
   if (codec === "8") return encodeCodec8(record);
   throw new RecordError();
+}
+
+/** Assembles 1–16 admitted single-record Extended frames, deriving count, length and CRC.
+ * Rejects mixed codecs, extra records or TCP frames over 1280 bytes before allocation.
+ */
+export function combineCodec8e(frames: readonly Codec8Frame[]): Codec8Frame {
+  if (frames.length < 1 || frames.length > 16) throw new RecordError();
+  const records = frames.map((frame) =>
+    Codec8Frame.fromExtendedBytes(Codec8Frame.snapshot(frame).bytes)
+      .snapshot()
+      .bytes.subarray(10, -5),
+  );
+  const size = 15 + records.reduce((sum, record) => sum + record.length, 0);
+  if (size > 1280) throw new RecordError();
+  const bytes = Buffer.alloc(size);
+  bytes.writeUInt32BE(size - 12, 4);
+  bytes[8] = 0x8e;
+  bytes[9] = frames.length;
+  let offset = 10;
+  for (const record of records) offset += record.copy(bytes, offset);
+  bytes[offset] = frames.length;
+  bytes.writeUInt32BE(crc16Arc(bytes.subarray(8, -4)), size - 4);
+  return Codec8Frame.fromExtendedBatchBytes(bytes);
 }

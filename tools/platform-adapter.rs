@@ -21,36 +21,37 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         match fleetiq_teltonika::decode(&frame) {
             Err(error) => writeln!(output, "reject:{}", error as u32)?,
             Ok(packet) => {
-                if packet.records.len() != 1 {
+                if packet.records.is_empty() || packet.records.len() > 16 {
                     return Err("adapter-record-count".into());
                 }
-                let record = packet.records.first().ok_or("adapter-empty-records")?;
-                let mut io = String::new();
-                for (index, value) in record.io.iter().enumerate() {
-                    if index != 0 {
-                        io.push(',');
+                for record in &packet.records {
+                    let mut io = String::new();
+                    for (index, value) in record.io.iter().enumerate() {
+                        if index != 0 {
+                            io.push(',');
+                        }
+                        write!(io, "{}:", value.id)?;
+                        for byte in &value.bytes {
+                            write!(io, "{byte:02x}")?;
+                        }
                     }
-                    write!(io, "{}:", value.id)?;
-                    for byte in &value.bytes {
-                        write!(io, "{byte:02x}")?;
-                    }
+                    writeln!(
+                        output,
+                        "ok\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        packet.codec,
+                        packet.records.len(),
+                        record.timestamp_ms,
+                        record.priority,
+                        record.gps.longitude,
+                        record.gps.latitude,
+                        record.gps.altitude_raw,
+                        record.gps.angle,
+                        record.gps.satellites,
+                        record.gps.speed,
+                        record.event_io_id,
+                        io
+                    )?;
                 }
-                writeln!(
-                    output,
-                    "ok\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    packet.codec,
-                    packet.records.len(),
-                    record.timestamp_ms,
-                    record.priority,
-                    record.gps.longitude,
-                    record.gps.latitude,
-                    record.gps.altitude_raw,
-                    record.gps.angle,
-                    record.gps.satellites,
-                    record.gps.speed,
-                    record.event_io_id,
-                    io
-                )?;
             }
         }
     }

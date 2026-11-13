@@ -138,8 +138,8 @@ const avlLayout = {
 };
 const tcpLayout = { preamble: 0, length: 4, payload: 8, checksumBytes: 4 };
 
-// This is the admitted FleetIQ profile's byte bound. Each frame in this slice
-// declares one record, independently of the transport's batch-count limit.
+// TCP bytes are bounded independently of transport batch count. Legacy factories
+// admit one record; the explicit Extended batch factory admits up to sixteen.
 const maxTcpFrameBytes = 1280;
 const recordCount = 1;
 
@@ -163,12 +163,13 @@ function isolatedCopy(bytes: Buffer): Buffer {
 }
 
 /**
- * Checks Extended IO shape up to the exclusive repeated-count offset.
- * Bounds every read, requires distinct IDs and exact total/byte consumption, and
+ * Checks one Extended record from start up to the exclusive repeated-count bound.
+ * Bounds every read, requires distinct IDs and exact total consumption, and
  * throws FrameError for malformed or out-of-profile groups; GPS scalars are not decoded.
  */
-function validateExtendedIo(bytes: Buffer, end: number): void {
-  let offset = 38;
+function validateExtendedIo(bytes: Buffer, start: number, end: number): number {
+  if (start + 38 > end) throw new FrameError();
+  let offset = start + 28;
   const ids = new Set<number>();
 
   /** Reads one big-endian field or fails before touching bytes beyond the IO body. */
@@ -190,12 +191,13 @@ function validateExtendedIo(bytes: Buffer, end: number): void {
       offset += length;
     }
   }
-  if (offset !== end || ids.size > 64 || ids.size !== bytes.readUInt16BE(36))
+  if (ids.size > 64 || ids.size !== bytes.readUInt16BE(start + 26))
     throw new FrameError();
+  return offset;
 }
 
 /**
- * Owns detached single-record bytes and their ACK count as one immutable runtime brand.
+ * Owns detached record bytes and their ACK count as one immutable runtime brand.
  * Codec 8 admission checks envelope/count/CRC; Extended admission also checks IO
  * structure. Neither factory is a complete semantic decoder or authenticates a peer.
  * Snapshots are copies, so transport cannot observe subsequent caller mutations.
@@ -205,7 +207,7 @@ export class Codec8Frame {
   readonly #recordCount: number;
 
   /** Copies and admits only the selected codec within the 1280-byte TCP profile. */
-  private constructor(input: Buffer, codec = 8) {
+  private constructor(input: Buffer, codec = 8, maxRecords = 1) {
     const minimumBytes =
       tcpLayout.payload +
       (codec === 8 ? avlLayout.minimumBytes : 41) +
@@ -224,13 +226,20 @@ export class Codec8Frame {
       bytes.readUInt32BE(tcpLayout.preamble) !== 0 ||
       bytes.readUInt32BE(tcpLayout.length) !== checksum - tcpLayout.payload ||
       bytes[tcpLayout.payload + avlLayout.codec] !== codec ||
-      declaredCount !== recordCount ||
+      declaredCount === undefined ||
+      declaredCount < 1 ||
+      declaredCount > maxRecords ||
       bytes[checksum - 1] !== declaredCount ||
       bytes.readUInt32BE(checksum) !==
         crc16Arc(bytes.subarray(tcpLayout.payload, checksum))
     )
       throw new FrameError();
-    if (codec === 0x8e) validateExtendedIo(bytes, checksum - 1);
+    if (codec === 0x8e) {
+      let offset = 10;
+      for (let index = 0; index < declaredCount; index++)
+        offset = validateExtendedIo(bytes, offset, checksum - 1);
+      if (offset !== checksum - 1) throw new FrameError();
+    }
     this.#bytes = bytes;
     this.#recordCount = declaredCount;
     Object.freeze(this);
@@ -244,6 +253,11 @@ export class Codec8Frame {
   /** Admits Codec 8E only, including bounded fixed/NX group structure. */
   static fromExtendedBytes(bytes: Buffer): Codec8Frame {
     return new Codec8Frame(bytes, 0x8e);
+  }
+
+  /** Admits 1–16 complete Codec 8E records, preserving count/byte ownership for transport. */
+  static fromExtendedBatchBytes(bytes: Buffer): Codec8Frame {
+    return new Codec8Frame(bytes, 0x8e, 16);
   }
 
   /** Validates and encodes the original Codec 8 record contract into owned bytes. */
@@ -263,7 +277,11 @@ export class Codec8Frame {
    */
   static snapshot(value: Codec8Frame | Buffer) {
     const frame = Buffer.isBuffer(value)
-      ? new Codec8Frame(value, value[8] === 0x8e ? 0x8e : 8)
+      ? new Codec8Frame(
+          value,
+          value[8] === 0x8e ? 0x8e : 8,
+          value[8] === 0x8e ? 16 : 1,
+        )
       : value;
     if (!(frame instanceof Codec8Frame) || !(#bytes in frame))
       throw new FrameError();

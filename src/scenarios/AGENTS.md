@@ -12,5 +12,7 @@ widths and independent raw-value expectations. Typed input errors must keep
 routes and model data out of diagnostics.
 
 Use `node --test tests/route.test.ts` for route/profile behavior. The disjoint
-scenario coverage group retains 90% lines / 85% branches. Do not move capture,
-send scheduling or transport deadlines into playback; SIM-PR10 owns scheduling.
+scenario coverage group retains 90% lines / 85% branches. `capture.ts` owns capture/send tick order and `clock.ts` maps injected monotonic
+elapsed time to virtual time. Route metadata exposes state transitions without
+advancing GPS samples. Keep transport deadlines outside all three. Use
+`node --test tests/capture.test.ts` for clock, trigger and batching composition.

@@ -121,13 +121,13 @@ Unexpected defects produce only `internal-error`, without a stack trace or
 exception text.
 
 The wire layer exposes the AVL payload separately from the TCP envelope.
-`Codec8Frame` validates a single-record TCP envelope and retains a private
+`Codec8Frame` admits TCP frames through codec-specific factories and retains a private
 copy of its bytes and declared count. Transport accepts these frames and
 continues to accept raw Buffer inputs through wire validation.
 `fromBytes` remains Codec 8 only; `fromExtendedBytes` explicitly admits Codec 8E.
 Transport snapshots admit either codec, with Extended IO structure checked too.
 
-A receipt counts each locally acknowledged batch once, even if it was sent
+A receipt counts each locally acknowledged record once, even if it was sent
 several times. After a connection failure without an ACK, remote acceptance
 is unknown. Exhausted runs emit a failure and no success receipt. The receiver
 may already have accepted some or all transmitted records.
@@ -200,4 +200,14 @@ stops/ignition, explicit looping, GPS-loss state and exact device-clock drift.
 See [the playback contract](docs/scenario-playback.md),
 [normal-day scenario](scenarios/normal-day.json) and
 [reviewed IO catalogue](profiles/fmb920-docs-v1.json). This API does not claim
-hardware fidelity; capture/send scheduling follows in SIM-PR10.
+hardware fidelity; capture/send scheduling uses the [capture and batching APIs](docs/capture-batching.md).
+
+
+## Capture and bounded batching (SIM-PR10)
+
+`capture` yields independent virtual capture/send ticks. `BatchQueue` freezes
+Codec 8E records and assembles FIFO packets under record/byte limits, retaining
+pending records until explicit acknowledgement. `createClock(1)` maps real-time
+elapsed milliseconds; scales 2–1000 explicitly accelerate virtual simulation.
+See [the API contracts and composition](docs/capture-batching.md). The CLI still
+accepts its existing single-record config; durable run/spool integration is SIM-PR11.

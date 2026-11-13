@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Codec8Frame, RecordError } from "../src/wire/codec8.ts";
-import { encodeAvlRecord, encodeCodec8e } from "../src/wire/codec8e.ts";
+import {
+  combineCodec8e,
+  encodeAvlRecord,
+  encodeCodec8e,
+} from "../src/wire/codec8e.ts";
 import { frame, record } from "./codec8-fixture.ts";
 import { oracleCrc } from "./codec8-oracle.ts";
 import {
@@ -152,4 +156,67 @@ test("short variable values stay in NX and raw IDs cannot repeat", () => {
   bytes.writeUInt16BE(500, 60);
   bytes.writeUInt32BE(oracleCrc(bytes.subarray(8, -4)), bytes.length - 4);
   assert.throws(() => Codec8Frame.fromExtendedBytes(bytes), /invalid-frame/);
+});
+
+test("multi-record Extended assembly preserves literal bodies and independently checked CRC", () => {
+  const single = Codec8Frame.fromExtendedBytes(
+    Buffer.from(variableFrame, "hex"),
+  );
+  const batch = combineCodec8e([single, single]);
+  const bytes = batch.snapshot().bytes;
+  assert.equal(bytes.length, 117);
+  assert.equal(bytes[9], 2);
+  assert.equal(bytes[112], 2);
+  assert.equal(
+    bytes.subarray(10, -5).toString("hex"),
+    variableFrame.slice(20, -10).repeat(2),
+  );
+  assert.equal(bytes.readUInt32BE(113), oracleCrc(bytes.subarray(8, -4)));
+  assert.equal(Codec8Frame.snapshot(bytes).recordCount, 2);
+  assert.throws(() => Codec8Frame.fromExtendedBytes(bytes), /invalid-frame/);
+  for (const values of [
+    [],
+    Array(17).fill(single),
+    [Codec8Frame.fromBytes(Buffer.from(frame, "hex"))],
+  ])
+    assert.throws(() => combineCodec8e(values));
+  const large = Codec8Frame.fromExtendedBytes(
+    encodeCodec8e({
+      ...extended,
+      io: [],
+      variableIo: [{ id: 1, hex: "00".repeat(256) }],
+    }),
+  );
+  assert.throws(() => combineCodec8e(Array(16).fill(large)));
+  const edge = (length: number) =>
+    Codec8Frame.fromExtendedBytes(
+      encodeCodec8e({
+        ...extended,
+        io: [],
+        variableIo: [
+          { id: 1, hex: "00".repeat(256) },
+          { id: 2, hex: "00".repeat(length) },
+        ],
+      }),
+    );
+  assert.equal(
+    combineCodec8e([large, large, large, edge(69)]).snapshot().bytes.length,
+    1280,
+  );
+  assert.throws(
+    () => combineCodec8e([large, large, large, edge(70)]),
+    RecordError,
+  );
+  const sixteen = combineCodec8e(Array(16).fill(single));
+  assert.equal(sixteen.recordCount, 16);
+  for (const count of [0, 3, 17]) {
+    const wrong = Buffer.from(bytes);
+    wrong[9] = count;
+    wrong[112] = count;
+    wrong.writeUInt32BE(oracleCrc(wrong.subarray(8, -4)), 113);
+    assert.throws(
+      () => Codec8Frame.fromExtendedBatchBytes(wrong),
+      /invalid-frame/,
+    );
+  }
 });
