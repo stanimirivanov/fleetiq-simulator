@@ -16,3 +16,10 @@ Wire owns the AVL payload, TCP envelope, CRC and declared record count.
 `Codec8Frame` retains a private validated byte snapshot and exposes copies.
 Transport consumes that snapshot and its count together. Keep raw Buffer
 admission and frame validation in wire when changing future codecs.
+
+
+Legacy factories remain single-record. `fromExtendedBatchBytes` admits 1–16
+complete Extended records within 1280 TCP bytes; `combineCodec8e` derives both
+counts, length and CRC from owned single-record frames. Never let session or
+transport override byte/count metadata. Run `node --test tests/codec8e.test.ts`
+for assembly, strict admission, count/byte boundaries and independent CRC checks.

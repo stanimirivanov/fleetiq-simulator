@@ -150,6 +150,7 @@ function segments(route: Route) {
 
 /**
  * Creates an owned virtual playback cursor; no files, clocks, sockets or ambient randomness.
+ * Transitions expose phase/endpoint state for capture scheduling without sampling GPS.
  * Samples must be safe integer milliseconds in nondecreasing order within durationMs.
  * Slerp uses the 6371008.8m mean-radius sphere and rounds coordinates once to e7.
  * Device timestamps use exact bigint offset/drift (fractional milliseconds truncate
@@ -182,6 +183,51 @@ export function createPlayback(
     throw new ScenarioError();
   const io = createProfile(profile);
   const loop = scenario.loop;
+  const transitions: Readonly<{
+    atMs: number;
+    ignition: boolean;
+    moving: boolean;
+  }>[] = [];
+  let atMs = 0,
+    distance = 0n;
+  for (const phase of phases) {
+    const moving =
+      phase.speedMmPerSecond > 0 &&
+      (loop || Number(distance) / 1000000 < routeLength);
+    transitions.push(Object.freeze({ atMs, ignition: phase.ignition, moving }));
+    if (
+      !loop &&
+      moving &&
+      Number(
+        distance + BigInt(phase.durationMs) * BigInt(phase.speedMmPerSecond),
+      ) /
+        1000000 >=
+        routeLength
+    ) {
+      let low = 1,
+        high = phase.durationMs;
+      while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        if (
+          Number(distance + BigInt(mid) * BigInt(phase.speedMmPerSecond)) /
+            1000000 >=
+          routeLength
+        )
+          high = mid;
+        else low = mid + 1;
+      }
+      if (low < phase.durationMs || atMs + low === durationMs)
+        transitions.push(
+          Object.freeze({
+            atMs: atMs + low,
+            ignition: phase.ignition,
+            moving: false,
+          }),
+        );
+    }
+    distance += BigInt(phase.durationMs) * BigInt(phase.speedMmPerSecond);
+    atMs += phase.durationMs;
+  }
   let seed = 2166136261;
   for (const char of scenario.seed)
     seed = Math.imul(seed ^ char.charCodeAt(0), 16777619) >>> 0;
@@ -275,5 +321,9 @@ export function createPlayback(
       variableIo: [],
     };
   }
-  return Object.freeze({ durationMs, sample });
+  return Object.freeze({
+    durationMs,
+    transitions: Object.freeze(transitions),
+    sample,
+  });
 }

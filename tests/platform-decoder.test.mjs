@@ -119,3 +119,18 @@ test("native corpus retains normal-day motion, stops and no-fix model IO", () =>
   );
   assert.ok(records.some((fields) => fields[12]?.includes("239:00")));
 });
+
+test("native corpus includes every ordered record in 2/16-record packets", () => {
+  for (const count of [2, 16]) {
+    const entry = platformCases().find(({ expected }) =>
+      expected.startsWith(`ok\t142\t${count}\t`),
+    );
+    assert.ok(entry);
+    const records = entry.expected.split("\n");
+    assert.equal(records.length, count);
+    assert.deepEqual(
+      records.map((line) => line.split("\t")[3]),
+      Array.from({ length: count }, (_, index) => String(index)),
+    );
+  }
+});

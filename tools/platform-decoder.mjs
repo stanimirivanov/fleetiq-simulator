@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createPlayback } from "../src/scenarios/route.ts";
-import { encodeCodec8 } from "../src/wire/codec8.ts";
-import { encodeCodec8e } from "../src/wire/codec8e.ts";
+import { Codec8Frame, encodeCodec8 } from "../src/wire/codec8.ts";
+import { combineCodec8e, encodeCodec8e } from "../src/wire/codec8e.ts";
 import { generatedCorpus } from "../tests/codec8-corpus.ts";
 import { singleRecordVectors } from "../tests/codec8-vectors.ts";
 import { extended, variableRecord } from "../tests/codec8e-fixture.ts";
@@ -73,8 +73,9 @@ export function verifyCheckout(root) {
  * @param {Omit<import("../src/wire/codec8.ts").Record8, "schemaVersion">} record
  * @param {number} [codec]
  * @param {{id: number, hex: string}[]} [variableIo]
+ * @param {number} [count]
  */
-function expectedLine(record, codec = 8, variableIo = []) {
+function expectedLine(record, codec = 8, variableIo = [], count = 1) {
   if (
     BigInt(record.timestampMs) > 9223372036854775807n ||
     new Set(record.io.map((value) => value.id)).size !== record.io.length
@@ -89,7 +90,7 @@ function expectedLine(record, codec = 8, variableIo = []) {
   return [
     "ok",
     codec,
-    1,
+    count,
     record.timestampMs,
     record.priority,
     record.longitudeE7,
@@ -155,7 +156,23 @@ export function platformCases() {
   const routeRecords = [0, 30000, 60000, 90000, 100000, 160000].map((at) =>
     playback.sample(at),
   );
+  const batches = [2, 16].map((count) => {
+    const records = Array.from({ length: count }, (_, index) => ({
+      ...variableRecord,
+      timestampMs: String(index),
+    }));
+    const frames = records.map((record) =>
+      Codec8Frame.fromExtendedBytes(encodeCodec8e(record)),
+    );
+    return {
+      hex: combineCodec8e(frames).snapshot().bytes.toString("hex"),
+      expected: records
+        .map((record) => expectedLine(record, 0x8e, record.variableIo, count))
+        .join("\n"),
+    };
+  });
   return [
+    ...batches,
     ...[
       ...routeRecords,
       extended,

@@ -12,6 +12,16 @@ const catalogue = {
   fuelUsed: [12, 4],
 } as const;
 
+/**
+ * Documentation-derived event IDs retain the FMB920 profile's low/regular priority.
+ * Capture timing is a lab policy, not a claim about factory trigger configuration.
+ */
+export const profileEvents = Object.freeze({
+  ignition: Object.freeze({ eventId: catalogue.ignition[0], priority: 0 }),
+  movement: Object.freeze({ eventId: catalogue.movement[0], priority: 0 }),
+  stop: Object.freeze({ eventId: catalogue.movement[0], priority: 0 }),
+});
+
 /** Fixed profile identity and reviewed field widths; JSON cannot redefine sensor meanings. */
 type Profile = {
   schemaVersion: 1;
