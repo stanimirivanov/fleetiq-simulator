@@ -4,6 +4,7 @@ import {
   constants,
   fstatSync,
   openSync,
+  readdirSync,
   readSync,
   writeFileSync,
 } from "node:fs";
@@ -12,6 +13,12 @@ import { pathToFileURL } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { capture } from "./scenarios/capture.ts";
 import { FaultError, faultSchema, planFaults } from "./scenarios/faults.ts";
+import {
+  buildFleet,
+  FairFleet,
+  FleetError,
+  type FleetPolicy,
+} from "./scenarios/fleet.ts";
 import { ProfileError } from "./scenarios/profile.ts";
 import { createPlayback, ScenarioError } from "./scenarios/route.ts";
 import { BatchQueue } from "./session/batches.ts";
@@ -21,6 +28,7 @@ import {
   type DeliveryReceipt,
   defaultTarget,
   SessionError,
+  sessionDefaults,
   sessionLimits,
 } from "./session/state.ts";
 import { Codec8Frame, RecordError } from "./wire/codec8.ts";
@@ -102,6 +110,10 @@ function reportFailure(
   if (error instanceof RecordError) {
     report("invalid-record");
     return 2;
+  }
+  if (error instanceof FleetError) {
+    report(error.category);
+    return error.category === "fleet-overflow" ? 4 : 2;
   }
   if (error instanceof FaultError) {
     report("invalid-faults");
@@ -207,6 +219,15 @@ export function run(
   let frame: Buffer;
   try {
     const value = readInput(input);
+    if (command === "validate" && validFleetConfig(value)) {
+      const pinned = openPlaybackRoot(input, value);
+      try {
+        loadFleet(value, pinned.root);
+        return 0;
+      } finally {
+        pinned.close();
+      }
+    }
     if (command === "validate" && validFaultConfig(value)) {
       const task = selectFault(value);
       const identity = readIdentity(task.config, dirname(input));
@@ -355,6 +376,153 @@ function readAlternate(config: FaultRunConfig, root: string) {
     : undefined;
 }
 
+/** Private fleet input uses one shared geometry/profile and explicit independent member seeds/clocks. */
+export type FleetRunConfig = Omit<
+  RunConfig,
+  "record" | "deviceId" | "connectionPolicy"
+> & {
+  fleet: {
+    profile: "product" | "reference-peer";
+    maxConcurrent: number;
+    authorizedReferencePeer?: boolean;
+    retryDelayMs: number;
+    maxQueuedBytes: number;
+    routeFile: string;
+    scenarioFile: string;
+    profileFile: string;
+    intervalMs: number;
+    dropEvery: number;
+    devices: {
+      deviceId: string;
+      seed: string;
+      clockOffsetMs: number;
+      driftPpm: number;
+    }[];
+  };
+};
+const { deviceId: _fleetDevice, ...fleetCommon } = faultCommon;
+const validFleetConfig = new Ajv2020({
+  ownProperties: true,
+}).compile<FleetRunConfig>({
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "identityFile", "fleet"],
+  properties: {
+    ...fleetCommon,
+    fleet: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "profile",
+        "maxConcurrent",
+        "retryDelayMs",
+        "maxQueuedBytes",
+        "routeFile",
+        "scenarioFile",
+        "profileFile",
+        "intervalMs",
+        "dropEvery",
+        "devices",
+      ],
+      properties: {
+        profile: { enum: ["product", "reference-peer"] },
+        maxConcurrent: { type: "integer", minimum: 1, maximum: 100 },
+        authorizedReferencePeer: { type: "boolean" },
+        retryDelayMs: { type: "integer", minimum: 0, maximum: 60000 },
+        maxQueuedBytes: { type: "integer", minimum: 53, maximum: 16777216 },
+        routeFile: runConfigSchema.properties.identityFile,
+        scenarioFile: runConfigSchema.properties.identityFile,
+        profileFile: runConfigSchema.properties.identityFile,
+        intervalMs: { type: "integer", minimum: 1, maximum: 604800000 },
+        dropEvery: { type: "integer", minimum: 0, maximum: 1000 },
+        devices: {
+          type: "array",
+          minItems: 1,
+          maxItems: 100,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["deviceId", "seed", "clockOffsetMs", "driftPpm"],
+            properties: {
+              deviceId: runConfigSchema.properties.deviceId,
+              seed: {
+                type: "string",
+                pattern: "^[a-zA-Z0-9_-]{1,64}(?![\\s\\S])",
+              },
+              clockOffsetMs: {
+                type: "integer",
+                minimum: -86400000,
+                maximum: 86400000,
+              },
+              driftPpm: { type: "integer", minimum: -1000, maximum: 1000 },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
+/** Rejects unknown fleet fields before private reads or transport loading. */
+function selectFleet(value: unknown) {
+  if (!validFleetConfig(value)) throw new InputError("invalid-run-config");
+  return { kind: "fleet" as const, config: value };
+}
+
+/** Reads private inputs once, admits profile/identity policy, then prepares bounded independent captures. */
+function loadFleet(config: FleetRunConfig, root: string) {
+  const f = config.fleet;
+  const identities = readInput(resolve(root, config.identityFile), "spool");
+  if (
+    !identities ||
+    typeof identities !== "object" ||
+    Array.isArray(identities)
+  )
+    throw new InputError("invalid-identity-file");
+  const members = f.devices.map((m) => {
+    const identity = (identities as Record<string, unknown>)[m.deviceId];
+    if (
+      typeof identity !== "string" ||
+      identity.length !== 15 ||
+      /[^0-9]/u.test(identity)
+    )
+      throw new InputError("invalid-identity-file");
+    return { ...m, identity };
+  });
+  const policy: FleetPolicy = {
+    profile: f.profile,
+    maxConcurrent: f.maxConcurrent,
+    maxAttempts: config.retry?.maxAttempts ?? sessionDefaults.maxAttempts,
+    retryDelayMs: f.retryDelayMs,
+    maxQueuedBytes: f.maxQueuedBytes,
+  };
+  new FairFleet(
+    members.map((m) => ({ ...m, frames: [] })),
+    policy,
+  );
+  const prepared = buildFleet(
+    readInput(resolve(root, f.routeFile), "spool", 8 * 1024 * 1024),
+    readInput(resolve(root, f.scenarioFile), "spool", 1024 * 1024),
+    readInput(resolve(root, f.profileFile), "spool"),
+    members,
+    f.intervalMs,
+    f.dropEvery,
+    f.maxQueuedBytes,
+  );
+  return { prepared, policy };
+}
+
+/** Linux process high-water RSS, sampled descriptor count and actual CPU microseconds; no paths are returned. */
+function fleetResources() {
+  const cpu = process.cpuUsage();
+  return {
+    rssBytes: process.resourceUsage().maxRSS * 1024,
+    openFds: readdirSync("/proc/self/fd").length,
+    cpuUserUs: cpu.user,
+    cpuSystemUs: cpu.system,
+  };
+}
+
 /** Accelerated playback inputs are sibling private files; queue state lives in a dedicated directory. */
 export type PlaybackRunConfig = Omit<RunConfig, "record"> & {
   playback: {
@@ -453,7 +621,10 @@ function digest(value: unknown): string {
 }
 
 /** Pins and verifies one private input directory so later sibling reads cannot follow a replaced parent. */
-function openPlaybackRoot(path: string, config: PlaybackRunConfig) {
+function openPlaybackRoot(
+  path: string,
+  config: PlaybackRunConfig | FleetRunConfig,
+) {
   const fd = fileOperation(
     () =>
       openSync(
@@ -668,6 +839,11 @@ export async function runTcp(
   observeFault: (
     receipt: import("./transport/tcp.ts").FaultReceipt,
   ) => void = () => {},
+  observeFleet: (
+    receipt:
+      | import("./transport/fleet.ts").FleetResult
+      | { status: "fleet-rejected"; overflows: 1 },
+  ) => void = () => {},
 ): Promise<number> {
   const [, flag, path] = args;
   if (flag !== "--config" || !path || args.length !== 3) {
@@ -676,17 +852,47 @@ export async function runTcp(
   }
   try {
     const value = readInput(path);
-    const task = args[0] === "fault" ? selectFault(value) : selectRun(value);
+    const task =
+      args[0] === "fault"
+        ? selectFault(value)
+        : args[0] === "fleet"
+          ? selectFleet(value)
+          : selectRun(value);
     const config = task.config;
     if (args[0] === "resume" && task.kind !== "playback")
       throw new InputError("invalid-run-config");
     const inputRoot =
-      task.kind === "playback"
+      task.kind === "playback" || task.kind === "fleet"
         ? openPlaybackRoot(path, task.config)
         : undefined;
     try {
+      if (task.kind === "fleet") {
+        const { prepared, policy } = loadFleet(
+          task.config,
+          inputRoot?.root ?? dirname(path),
+        );
+        const { runFleet } = await import("./transport/fleet.ts");
+        const result = await runFleet(
+          prepared,
+          policy,
+          {
+            host: config.target?.host ?? defaultTarget.host,
+            port: config.target?.port ?? defaultTarget.port,
+            ...config.retry,
+            signal,
+            authorizedReferencePeer: task.config.fleet.authorizedReferencePeer,
+          },
+          fleetResources,
+        );
+        observeFleet(result);
+        return result.status === "fleet-completed"
+          ? 0
+          : result.status === "fleet-cancelled"
+            ? 130
+            : 3;
+      }
       const identity = readIdentity(
-        config,
+        task.config,
         inputRoot?.root ?? dirname(path),
         Boolean(inputRoot),
       );
@@ -734,6 +940,12 @@ export async function runTcp(
       inputRoot?.close();
     }
   } catch (error) {
+    if (
+      args[0] === "fleet" &&
+      error instanceof FleetError &&
+      error.category === "fleet-overflow"
+    )
+      observeFleet({ status: "fleet-rejected", overflows: 1 });
     return reportFailure(error, report);
   }
 }
@@ -744,7 +956,12 @@ if (
 ) {
   const args = process.argv.slice(2);
   const report = (category: string) => process.stderr.write(`${category}\n`);
-  if (args[0] === "run" || args[0] === "resume" || args[0] === "fault") {
+  if (
+    args[0] === "run" ||
+    args[0] === "resume" ||
+    args[0] === "fault" ||
+    args[0] === "fleet"
+  ) {
     const controller = new AbortController();
     const cancel = () => controller.abort();
     process.once("SIGINT", cancel);
@@ -762,6 +979,7 @@ if (
           process.stdout.write(
             `${JSON.stringify({ status: receipt.status, packets: receipt.packets, acknowledged: receipt.acknowledged, denied: receipt.denied, disconnected: receipt.disconnected })}\n`,
           ),
+        (receipt) => process.stdout.write(`${JSON.stringify(receipt)}\n`),
       );
     } finally {
       process.off("SIGINT", cancel);

@@ -42,7 +42,10 @@ export function wireAmbient(files) {
   host.readFile = (file) => files.get(file);
   const program = ts.createProgram(
     [...files.keys()].filter(
-      (file) => file.startsWith("wire/") || file.startsWith("scenarios/"),
+      (file) =>
+        file.startsWith("wire/") ||
+        file.startsWith("scenarios/") ||
+        file === "telemetry.ts",
     ),
     options,
     host,

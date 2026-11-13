@@ -226,3 +226,11 @@ An explicit authorized-local `fault` command applies packet-ordinal CRC, truncat
 split, duplicate, late-time, identity and disconnect actions after valid encoding.
 It reports sanitized observations separately from delivery receipts. See the
 [fault contract](docs/fault-scenarios.md) and [action example](scenarios/faults.json).
+
+## Fleet scheduling (SIM-PR13)
+
+The explicit `fleet` command rotates private independent devices through two
+product slots, or up to 100 explicitly authorized reference-peer slots. Retries
+release slots; fixed aggregate metrics distinguish simulated loss and transport
+failures. See [the fleet contract](docs/fleet.md) and [private-run template](scenarios/reconnect-storm.json).
+`pnpm test:bounds` measures actual RSS, FDs and CPU; canonical `pnpm check` includes it.

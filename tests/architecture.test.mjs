@@ -253,3 +253,35 @@ test("transport fault policy dependency does not widen to route/model owners", (
     /layer-import/,
   );
 });
+
+test("fleet orchestration consumes pure policy and metrics while measurements stay at the IO boundary", () => {
+  assert.deepEqual(
+    checkArchitecture(
+      files({
+        "transport/fleet.ts":
+          'import "node:timers/promises"; import "../scenarios/fleet.ts"; import "../telemetry.ts";',
+        "scenarios/fleet.ts": 'import "../wire/codec8.ts";',
+        "telemetry.ts": "export const count=0;",
+      }),
+    ),
+    [],
+  );
+  for (const text of [
+    'import "node:fs";',
+    "export const value=process.memoryUsage();",
+  ]) {
+    assert.equal(
+      checkArchitecture(files({ "telemetry.ts": text })).length > 0,
+      true,
+    );
+  }
+  assert.match(
+    checkArchitecture(
+      files({
+        "scenarios/fleet.ts": 'import "../transport/fleet.ts";',
+        "transport/fleet.ts": "",
+      }),
+    ).join("\n"),
+    /layer-import/,
+  );
+});

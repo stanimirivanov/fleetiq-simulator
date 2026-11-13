@@ -56,8 +56,9 @@ docs/harness-failures.md   sanitized root causes, controls and evidence
 | CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, scenarios, storage, Ajv, Node fs/path/url/crypto. Runtime transport loads are confined to the network command |
 | Storage | Private checkpoint IO, atomic replacement and exclusive writer lock | Storage, session, Node fs/crypto/sqlite |
 | Session state | Validated settings, monotonic run budget, error categories | Session/wire modules and Ajv checkpoint validation; filesystem effects stay in storage |
-| TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, pure `scenarios/faults.ts` only, Node net/dns, Effect |
+| TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, pure `scenarios/faults.ts` / `scenarios/fleet.ts`, telemetry, Node net/dns/timers, Effect |
 | Scenarios | Virtual route position, last sampled fix, model IO and deterministic fault plans | Scenarios, wire and Ajv; no ambient effects |
+| Telemetry | Fixed aggregate counters, histogram buckets and detached resource samples | No imports or ambient effects; IO supplies measured values |
 | Wire | Validated record, AVL payload, TCP envelope and immutable frame metadata | Wire and Ajv |
 
 The TypeScript AST gate checks imports, re-exports, import types, literal dynamic
@@ -411,3 +412,9 @@ and before/after rename/directory flush; CLI tests cover uncertain TCP packets,
 cooperative cancellation and exact resume. Image smoke exercises SQLite lock and
 private atomic replacement under the shipped nonroot/read-only constraints.
 See [the recovery contract](docs/offline-recovery.md) for scope and limitations.
+
+Fleet qualification uses `pnpm test:bounds`, appended once to `pnpm test:coverage`
+so canonical `pnpm check` retains its final live security stage.
+See [the fleet contract](docs/fleet.md) for Linux `/proc`/taskset prerequisites,
+actual one-CPU 2/100-session workloads, memory/FD/CPU measurements, caps and limits
+on the qualification claim. The telemetry group retains 90% lines / 85% branches.

@@ -21,3 +21,8 @@ public contracts and nontrivial named helpers with meaningful JSDoc; explain
 bounds, ownership, effects and failure behavior where relevant. Type signatures
 are not prose documentation. `pnpm lint:source-comments` enforces structure and
 spacing through the existing fast/canonical gates; review checks accuracy.
+
+`telemetry.ts` owns pure fixed-cardinality aggregates; transport supplies real
+measurements through its caller. No files, process state, timers or private labels
+belong in that module. Fleet retry orchestration lives in `transport/fleet.ts`;
+`scenarios/fleet.ts` owns only deterministic preparation and lease policy.

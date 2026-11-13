@@ -12,6 +12,7 @@ assert.match(readFileSync("/proc/self/status", "utf8"), /^NoNewPrivs:\s+1$/m);
 assert.match(readFileSync("/proc/mounts", "utf8"), /^\S+ \/ \S+ ro[, ]/m);
 const directory = mkdtempSync("/tmp/simulator-");
 const identity = "3".repeat(15);
+let expectedCodec = 8;
 const record = {
   schemaVersion: 1,
   timestampMs: "0",
@@ -48,7 +49,7 @@ const server = createServer((socket) => {
       pending.length >= 8 &&
       pending.length >= 12 + pending.readUInt32BE(4)
     ) {
-      assert.equal(pending[8], 8);
+      assert.equal(pending[8], expectedCodec);
       assert.equal(pending[9], 1);
       socket.end(Buffer.from([0, 0, 0, 1]));
     }
@@ -153,6 +154,86 @@ try {
     faultOutput,
     '{"status":"faults-completed","packets":3,"acknowledged":3,"denied":0,"disconnected":0}\n',
   );
+  expectedCodec = 0x8e;
+  for (const [name, value] of Object.entries({
+    "profile.json": JSON.parse(process.env.FLEETIQ_QUALIFICATION_PROFILE ?? ""),
+    "route.json": {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [0.01, 0],
+      ],
+    },
+    "scenario.json": {
+      schemaVersion: 1,
+      profile: "fmb920-docs-v1",
+      seed: "image",
+      startTimeMs: "1000000",
+      clockOffsetMs: 0,
+      driftPpm: 0,
+      loop: false,
+      phases: [
+        {
+          durationMs: 1000,
+          speedMmPerSecond: 1000,
+          ignition: true,
+          gpsFix: true,
+        },
+      ],
+    },
+    "fleet.json": {
+      schemaVersion: 1,
+      identityFile: "identities.json",
+      target: { transport: "tcp", host: "127.0.0.1", port: address.port },
+      retry: { maxAttempts: 1, ackDeadlineMs: 3000, totalDeadlineMs: 5000 },
+      fleet: {
+        profile: "product",
+        maxConcurrent: 2,
+        retryDelayMs: 20,
+        maxQueuedBytes: 16777216,
+        routeFile: "route.json",
+        scenarioFile: "scenario.json",
+        profileFile: "profile.json",
+        intervalMs: 1000,
+        dropEvery: 0,
+        devices: [
+          {
+            deviceId: "sim-a",
+            seed: "image-member",
+            clockOffsetMs: 0,
+            driftPpm: 0,
+          },
+        ],
+      },
+    },
+  }))
+    writeFileSync(`${directory}/${name}`, JSON.stringify(value), {
+      mode: 0o600,
+    });
+  const fleetChild = spawn(
+    process.execPath,
+    ["/app/dist/cli.js", "fleet", "--config", `${directory}/fleet.json`],
+    { timeout: 10000, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let fleetOutput = "",
+    fleetError = "";
+  fleetChild.stdout.on("data", (data) => {
+    fleetOutput += data;
+  });
+  fleetChild.stderr.on("data", (data) => {
+    fleetError += data;
+  });
+  const [fleetCode] = await once(fleetChild, "close");
+  assert.equal(fleetCode, 0);
+  assert.equal(fleetError, "");
+  const fleetResult = JSON.parse(fleetOutput);
+  assert.equal(fleetResult.status, "fleet-completed");
+  assert.equal(fleetResult.metrics.acknowledgedRecords, 2);
+  assert.equal(fleetResult.metrics.undeliveredRecords, 0);
+  assert.equal(fleetOutput.includes(identity), false);
+  assert.equal(fleetOutput.includes("sim-a"), false);
+  assert(fleetResult.metrics.peakRssBytes > 0);
+  assert(fleetResult.metrics.sampledPeakOpenFds > 0);
   const storageModule = "/app/dist/storage/spool.js";
 
   /** @type {typeof import("../src/storage/spool.ts")} */
