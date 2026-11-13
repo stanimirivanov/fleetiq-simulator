@@ -341,6 +341,8 @@ export function qualify() {
     )[0];
     const id = validateImage(metadata, revision, snapshot.fingerprint);
     const runtime = readFileSync(join(root, "tools/image-runtime.mjs"), "utf8");
+    const profile = snapshot.contents.get("profiles/fmb920-docs-v1.json");
+    if (!profile) throw new Error("image-profile-missing");
     const output = run("docker", [
       "run",
       ..."--rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 256m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=4m".split(
@@ -348,6 +350,8 @@ export function qualify() {
       ),
       "--name",
       `fleetiq-image-${directory.split("/").at(-1)?.toLowerCase()}`,
+      "--env",
+      `FLEETIQ_QUALIFICATION_PROFILE=${profile.toString("utf8")}`,
       "--entrypoint",
       "/usr/local/bin/node",
       id,

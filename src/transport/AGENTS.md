@@ -20,3 +20,9 @@ Retried bytes may have been accepted remotely before an ACK was lost.
 Explicit fault execution consumes only the pure `scenarios/faults.ts` plan; other
 scenario imports stay forbidden. Run `node --test tests/fault-tcp.test.ts`. Fault
 traffic has no retries or durable ACK removals and reports observations separately.
+
+`fleet.ts` consumes only pure fleet policy and telemetry, attempts one strict
+scoped send per lease and drains all running attempts on termination. Never hold
+a lease/socket while backing off or silently apply reference-peer capacity to
+product targets. Probe functions belong to CLI/harness IO owners. Verify with
+`node --test tests/fleet-tcp.test.ts` and `pnpm test:bounds`.

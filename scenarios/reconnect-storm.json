@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "identityFile": "private-identities.json",
+  "target": { "transport": "tcp", "host": "127.0.0.1", "port": 55027 },
+  "retry": {
+    "maxAttempts": 5,
+    "ackDeadlineMs": 3000,
+    "totalDeadlineMs": 30000
+  },
+  "fleet": {
+    "profile": "product",
+    "maxConcurrent": 2,
+    "retryDelayMs": 100,
+    "maxQueuedBytes": 16777216,
+    "routeFile": "private-route.json",
+    "scenarioFile": "private-scenario.json",
+    "profileFile": "private-profile.json",
+    "intervalMs": 1000,
+    "dropEvery": 0,
+    "devices": [
+      {
+        "deviceId": "sim-a",
+        "seed": "member-a",
+        "clockOffsetMs": 0,
+        "driftPpm": 0
+      },
+      {
+        "deviceId": "sim-b",
+        "seed": "member-b",
+        "clockOffsetMs": 1000,
+        "driftPpm": 10
+      }
+    ]
+  }
+}

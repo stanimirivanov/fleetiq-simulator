@@ -21,3 +21,8 @@ advancing GPS samples. Keep transport deadlines outside all three. Use
 action per original packet ordinal. Keep malformed bytes out of valid wire
 constructors; mutations, identity selection and duplicate expansion happen before
 IO. `node --test tests/faults.test.ts` checks admission, exact bytes and bounds.
+
+`fleet.ts` prepares independent seeded/device-clock playbacks and owns fair FIFO
+leases under profile/queue caps. All scheduling times are caller-supplied; no
+async attempts, backoff timers or metrics sampling belong here. Run
+`node --test tests/fleet.test.ts` for admission, independence and fairness.

@@ -8,7 +8,8 @@ import { wireAmbient } from "./wire-ambient.mjs";
 
 const layers = {
   cli: ["session", "wire", "transport", "scenarios", "storage"],
-  transport: ["transport", "session", "wire"],
+  transport: ["transport", "session", "wire", "telemetry"],
+  telemetry: [],
   session: ["session", "wire"],
   wire: ["wire"],
   scenarios: ["scenarios", "wire"],
@@ -57,6 +58,7 @@ function moduleContext(file, name) {
  */
 function owner(file) {
   if (file === "cli.ts") return "cli";
+  if (file === "telemetry.ts") return "telemetry";
   const first = file.split("/")[0];
   if (
     first === "wire" ||
@@ -79,7 +81,9 @@ function allowedExternal(layer, name) {
     return ["node:fs", "node:crypto", "node:sqlite"].includes(name);
   if (layer === "session") return name === "ajv/dist/2020.js";
   if (layer === "transport")
-    return ["node:net", "node:dns", "effect"].includes(name);
+    return ["node:net", "node:dns", "node:timers/promises", "effect"].includes(
+      name,
+    );
   if (layer === "wire" || layer === "scenarios")
     return name === "ajv/dist/2020.js";
   return (
@@ -199,7 +203,10 @@ export function checkArchitecture(files) {
         report(node, "unresolved-import", name);
       } else if (
         !layers[layer].some((allowed) => allowed === owner(target)) &&
-        !(layer === "transport" && target === "scenarios/faults.ts")
+        !(
+          layer === "transport" &&
+          ["scenarios/faults.ts", "scenarios/fleet.ts"].includes(target)
+        )
       ) {
         report(node, "layer-import", name);
       } else if (
@@ -224,7 +231,7 @@ export function checkArchitecture(files) {
      */
     const visit = (node) => {
       if (
-        (layer === "wire" || layer === "scenarios") &&
+        (layer === "wire" || layer === "scenarios" || layer === "telemetry") &&
         ambient.isAmbient(node)
       )
         report(node, "wire-ambient");
