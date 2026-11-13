@@ -75,6 +75,9 @@ checks complement the loopback tests that protect transport semantics.
 The type gate checks source, TypeScript test helpers, and JavaScript test and
 tool modules. The build emits only production code. Biome enforces named exports
 and TypeScript rejects syntax that requires runtime transformation.
+Source documentation now runs through `pnpm lint:source-comments` alongside the
+existing tooling comment gate; see the [comment standard](docs/comment-quality.md)
+for declaration coverage, local-helper thresholds and semantic review limits.
 
 The canonical gate executes lint, type checking, architecture and canaries, build,
 coverage tests, secret scanning and the dependency audit. `pnpm test:coverage`

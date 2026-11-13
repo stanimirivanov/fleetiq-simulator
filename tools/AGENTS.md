@@ -24,7 +24,9 @@ guarantees, assumes, or deliberately leaves out. Type tags support `checkJs`.
 Explain information a reader cannot get from the signature, such as why a
 cycle check tracks the active path or why scanner output stays private.
 
-`pnpm lint:comments` applies ESLint only to tooling modules. It uses
+Follow the [shared JS/TS comment standard](../docs/comment-quality.md).
+`pnpm lint:comments` applies ESLint to tooling modules;
+`pnpm lint:source-comments` applies the source declaration policy to TypeScript. It uses
 [ESLint Stylistic's lines-around-comment](https://eslint.style/rules/lines-around-comment)
 and [eslint-plugin-jsdoc's require-jsdoc](https://github.com/gajus/eslint-plugin-jsdoc/blob/main/docs/rules/require-jsdoc.md)
 and [require-description](https://github.com/gajus/eslint-plugin-jsdoc/blob/main/docs/rules/require-description.md).

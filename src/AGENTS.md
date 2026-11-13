@@ -10,3 +10,10 @@ paths, endpoints or wire bytes.
 `transport/` owns handshake and delivery. The CLI composes them. Use explicit relative `.ts` imports so
 Node and the build agree. New top-level source owners require a reviewed
 boundary update in `tools/architecture.mjs`.
+
+
+Follow the [shared JS/TS comment standard](../docs/comment-quality.md). Document
+public contracts and nontrivial named helpers with meaningful JSDoc; explain
+bounds, ownership, effects and failure behavior where relevant. Type signatures
+are not prose documentation. `pnpm lint:source-comments` enforces structure and
+spacing through the existing fast/canonical gates; review checks accuracy.

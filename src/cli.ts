@@ -20,6 +20,9 @@ import { encodeAvlRecord } from "./wire/codec8e.ts";
 
 const maxInput = 16 * 1024;
 
+/**
+ * Reviewed file/config failure categories; output must never include input contents or paths.
+ */
 type InputCategory =
   | "invalid-input-file"
   | "invalid-identity-file"
@@ -29,17 +32,23 @@ type InputCategory =
   | "output-unavailable"
   | "invalid-run-config";
 
+/**
+ * Expected input failure distinct from programming defects and session errors.
+ */
 class InputError extends Error {
   readonly category: InputCategory;
 
+  /** Stores only the fixed output category, without retaining an underlying private error. */
   constructor(category: InputCategory) {
     super(category);
     this.category = category;
   }
 }
 
-// Only filesystem errno failures become input errors. Programming defects
-// at the same boundary retain the internal-error classification.
+/**
+ * Maps only filesystem errno failures to the supplied fixed input category.
+ * Programming defects at the same boundary propagate for internal-error classification.
+ */
 function fileOperation<A>(operation: () => A, category: InputCategory): A {
   try {
     return operation();
@@ -57,6 +66,11 @@ function fileOperation<A>(operation: () => A, category: InputCategory): A {
   }
 }
 
+/**
+ * Emits only a reviewed category and maps expected input/session failures to CLI exit codes.
+ * Unexpected defects report internal-error (1); invalid input is 2, session failure
+ * is 3 and cancellation is 130. Never serializes arbitrary Error messages.
+ */
 function reportFailure(
   error: unknown,
   report: (category: string) => void,
@@ -78,6 +92,12 @@ function reportFailure(
   return 1;
 }
 
+/**
+ * Reads at most 16 KiB of strict UTF-8 JSON from a regular, non-symlink file.
+ * Private identity files additionally require current-user ownership and no group/other
+ * permissions. Always attempts descriptor cleanup; expected file/JSON failures
+ * become InputError while programming defects propagate.
+ */
 function readInput(path: string, privateFile = false): unknown {
   const fd = fileOperation(
     () =>
@@ -130,6 +150,11 @@ function readInput(path: string, privateFile = false): unknown {
   }
 }
 
+/**
+ * Runs offline validate/encode without loading transport or sending network traffic.
+ * Encoding exclusively creates a mode-0600 output file; success is silent. Reports
+ * fixed failure categories through report and returns the corresponding CLI exit code.
+ */
 export function run(
   args: string[],
   report: (category: string) => void,
@@ -168,6 +193,11 @@ export function run(
   return 0;
 }
 
+/**
+ * Version-1 file layout for one authorized device and one record.
+ * The identity filename is resolved beside the config; record validation belongs
+ * to wire, while target/retry admission belongs to session and transport.
+ */
 export type RunConfig = {
   schemaVersion: 1;
   identityFile: string;
@@ -183,6 +213,11 @@ export type RunConfig = {
 };
 
 const integer = { type: "integer" };
+
+/**
+ * Closed run-file schema; wire validates record contents and session validates numeric ranges.
+ * Identity paths are restricted to a sibling filename before any private file is opened.
+ */
 export const runConfigSchema = {
   type: "object",
   additionalProperties: false,
@@ -225,6 +260,12 @@ const validRunConfig = new Ajv2020({ ownProperties: true }).compile<RunConfig>(
   runConfigSchema,
 );
 
+/**
+ * Validates run config, record and private identity before lazily loading transport.
+ * Sends one frame under the caller’s cancellation signal and calls acknowledge only
+ * after a matching wire ACK. Returns a CLI exit code and reports fixed categories;
+ * no receipt asserts downstream projection or browser acceptance.
+ */
 export async function runTcp(
   args: string[],
   report: (category: string) => void,
