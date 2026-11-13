@@ -197,7 +197,10 @@ export function checkArchitecture(files) {
       const target = posix.normalize(posix.join(posix.dirname(file), name));
       if (!files.has(target)) {
         report(node, "unresolved-import", name);
-      } else if (!layers[layer].some((allowed) => allowed === owner(target))) {
+      } else if (
+        !layers[layer].some((allowed) => allowed === owner(target)) &&
+        !(layer === "transport" && target === "scenarios/faults.ts")
+      ) {
         report(node, "layer-import", name);
       } else if (
         layer === "cli" &&

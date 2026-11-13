@@ -6,6 +6,7 @@ import {
   type Socket,
 } from "node:net";
 import { Cause, Effect, Exit } from "effect";
+import { planFaults } from "../scenarios/faults.ts";
 import {
   type DeliveryReceipt,
   SessionError,
@@ -71,6 +72,8 @@ function readReply(
   size: 1 | 4,
   expired: () => boolean,
   timeout: SessionError,
+  splitAt: number | null = null,
+  closeAfter = false,
 ) {
   return Effect.callback<Buffer, SessionError>((resume) => {
     if (socket.destroyed || socket.readableEnded) {
@@ -117,7 +120,17 @@ function readReply(
     socket.on("close", closed);
     socket.on("end", closed);
     socket.on("readable", readable);
-    socket.write(bytes);
+    if (splitAt === null) {
+      if (closeAfter) socket.end(bytes);
+      else socket.write(bytes);
+    } else {
+      socket.write(bytes.subarray(0, splitAt), (error) => {
+        if (!error && !socket.destroyed) {
+          if (closeAfter) socket.end(bytes.subarray(splitAt));
+          else socket.write(bytes.subarray(splitAt));
+        }
+      });
+    }
     return Effect.sync(cleanup);
   });
 }
@@ -145,6 +158,8 @@ function exchange(
   bytes: Buffer,
   size: 1 | 4,
   limits: SessionLimits,
+  splitAt: number | null = null,
+  closeAfter = false,
 ) {
   return Effect.gen(function* () {
     const started = limits.now();
@@ -164,6 +179,8 @@ function exchange(
       size,
       () => limits.now() >= deadline,
       timeout,
+      splitAt,
+      closeAfter,
     ).pipe(
       Effect.timeoutOrElse({
         duration: Math.ceil(wait),
@@ -285,6 +302,125 @@ export async function sendBatches(
     } satisfies DeliveryReceipt;
   });
 
+  const exit = await Effect.runPromiseExit(program, { signal: options.signal });
+  if (Exit.isFailure(exit)) {
+    if (Cause.hasInterruptsOnly(exit.cause))
+      throw new SessionError("cancelled");
+    throw Cause.squash(exit.cause);
+  }
+  return exit.value;
+}
+
+/** Sanitized observations only; a denial means no successful ACK, not proof of server validation. */
+export type FaultReceipt = {
+  status: "faults-completed";
+  packets: number;
+  acknowledged: number;
+  denied: number;
+  disconnected: number;
+};
+
+/**
+ * Executes a bounded opt-in fault plan once per scheduled transmission, on fresh strict sockets.
+ * Never retries, touches a durable queue or emits a normal delivery receipt. Cancellation and
+ * whole-run expiry fail the run; malformed traffic receiving a positive ACK fails visibly.
+ */
+export async function sendFaultBatches(
+  frames: readonly (Buffer | Codec8Frame)[],
+  spec: unknown,
+  options: SessionOptions & { unregisteredIdentity?: string },
+): Promise<FaultReceipt> {
+  const limits = sessionLimits({
+    ...options,
+    maxAttempts: options.maxAttempts ?? 1,
+  });
+  if (limits.maxAttempts !== 1 || limits.connectionPolicy !== "single-batch")
+    throw new SessionError("invalid-session");
+  const packets = planFaults(
+    frames,
+    spec,
+    options.identity,
+    options.unregisteredIdentity,
+  );
+  const result: FaultReceipt = {
+    status: "faults-completed",
+    packets: packets.length,
+    acknowledged: 0,
+    denied: 0,
+    disconnected: 0,
+  };
+  const program = Effect.gen(function* () {
+    for (const packet of packets) {
+      yield* remainingBudget(limits);
+      const connection = Effect.gen(function* () {
+        const { socket } = yield* openSocket(options);
+        const login = Buffer.alloc(17);
+        login.writeUInt16BE(15);
+        login.write(packet.identity, 2, "ascii");
+        const accepted = yield* exchange(socket, login, 1, limits);
+        if (accepted[0] !== 1)
+          return yield* Effect.fail(new SessionError("login-refused"));
+        if (packet.disconnect !== null) {
+          if (packet.disconnect === "after") {
+            const remaining = yield* remainingBudget(limits);
+            yield* Effect.callback<void, SessionError>((resume) => {
+              const closed = () => resume(Effect.void);
+              socket.once("close", closed);
+
+              // Drain replies only to finish FIN; this deliberate disconnect never credits an ACK.
+              socket.resume();
+              socket.end(packet.bytes);
+              return Effect.sync(() => socket.off("close", closed));
+            }).pipe(
+              Effect.timeoutOrElse({
+                duration: Math.ceil(Math.min(limits.ackDeadlineMs, remaining)),
+                orElse: () => Effect.fail(new SessionError("run-timeout")),
+              }),
+            );
+          }
+          result.disconnected++;
+          return;
+        }
+        const reply = yield* exchange(
+          socket,
+          packet.bytes,
+          4,
+          limits,
+          packet.splitAt,
+          packet.closeAfter,
+        );
+        const count = reply.readUInt32BE();
+        if (packet.deny) {
+          if (count > 0)
+            return yield* Effect.fail(new SessionError("fault-accepted"));
+          result.denied++;
+          return;
+        }
+        if (count !== packet.recordCount)
+          return yield* Effect.fail(new SessionError("ack-count"));
+        result.acknowledged++;
+      }).pipe(
+        Effect.scoped,
+        Effect.catch((error) => {
+          if (
+            packet.deny &&
+            [
+              "login-refused",
+              "connection-closed",
+              "login-timeout",
+              "ack-timeout",
+            ].includes(error.category)
+          ) {
+            result.denied++;
+            return Effect.void;
+          }
+          return Effect.fail(error);
+        }),
+      );
+      yield* connection;
+    }
+    return result;
+  });
   const exit = await Effect.runPromiseExit(program, { signal: options.signal });
   if (Exit.isFailure(exit)) {
     if (Cause.hasInterruptsOnly(exit.cause))
