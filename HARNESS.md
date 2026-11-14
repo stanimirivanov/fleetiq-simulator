@@ -75,6 +75,14 @@ checks complement the loopback tests that protect transport semantics.
 | Pre-PR | `pnpm install --frozen-lockfile`, `pnpm check`, then `pnpm security` on the final lockfile | Fix the cause or report a missing tool, unavailable advisory service or other incomplete gate |
 | PR CI | Existing `Simulator verification / check` job runs `pnpm check` | Attach concise, sanitized failure evidence to the task and return to the relevant narrow check |
 
+Product image dependency preparation lives in `packaging/image-deps.mjs`,
+with behavior tests in `tests/packaging/image-deps.test.mjs`. Docker copies only
+that product-owned helper, not the harness tooling tree. The packaging coverage
+group retains the product 90% line / 85% branch floor; strict JS typechecking and
+comment lint include the new owner. Root `pnpm test` uses quoted recursive globs
+so nested product suites remain discoverable. Image qualification stays in the
+harness tooling and is required after changes to product packaging.
+
 The type gate checks source, TypeScript test helpers, and JavaScript test and
 tool modules. The build emits only production code. Biome enforces named exports
 and TypeScript rejects syntax that requires runtime transformation.

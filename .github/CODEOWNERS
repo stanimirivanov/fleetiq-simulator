@@ -2,6 +2,7 @@
 /.github/ @stanimirivanov
 /.githooks/ @stanimirivanov
 /tools/ @stanimirivanov
+/packaging/ @stanimirivanov
 /tests/ @stanimirivanov
 /**/AGENTS.md @stanimirivanov
 /CONSTRAINTS.md @stanimirivanov

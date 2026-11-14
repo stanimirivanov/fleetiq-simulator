@@ -1,18 +1,10 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { parse } from "yaml";
-import { prepareRuntimeDependencies } from "../tools/image-deps.mjs";
 import {
   printableLayer,
   rejectIdentityFiles,
@@ -244,52 +236,4 @@ test("layer identity checks honor file boundaries instead of mistaking runtime c
     () => rejectIdentityFiles(layer(Buffer.from("safe")).subarray(0, 513)),
     /image-layers-invalid/,
   );
-});
-
-test("runtime packaging strips examples and development assets while preserving executable strings and licenses", () => {
-  const directory = mkdtempSync(join(tmpdir(), "sim-runtime-deps-"));
-  try {
-    mkdirSync(join(directory, "src"));
-    writeFileSync(
-      join(directory, "src/source.ts"),
-      "export const source = true;",
-    );
-    writeFileSync(
-      join(directory, "index.d.ts"),
-      "export declare const value: string;",
-    );
-    writeFileSync(join(directory, "index.js.map"), "{}");
-    writeFileSync(join(directory, "README.md"), "development documentation");
-    writeFileSync(join(directory, "LICENSE.md"), "copyright notice");
-    const executable = 'export const value = "literal /* preserved */";';
-    writeFileSync(
-      join(directory, "index.js"),
-      `/** example-only configuration */\n${executable}`,
-    );
-    writeFileSync(
-      join(directory, "bin.cjs"),
-      '#!/usr/bin/env node\n/* copyright fixture */\nprocess.stdout.write("ready");',
-    );
-    prepareRuntimeDependencies(directory);
-    const result = readFileSync(join(directory, "index.js"), "utf8");
-    const binary = spawnSync(process.execPath, [join(directory, "bin.cjs")]);
-    assert.equal(binary.status, 0);
-    assert.equal(binary.stdout.toString(), "ready");
-    assert(readFileSync(join(directory, "bin.cjs"), "utf8").startsWith("#!"));
-    assert(!result.includes("example-only"));
-    assert(result.includes('"literal /* preserved */"'));
-    assert.equal(
-      readFileSync(join(directory, "LICENSE.md"), "utf8"),
-      "copyright notice",
-    );
-    for (const file of [
-      "src/source.ts",
-      "index.d.ts",
-      "index.js.map",
-      "README.md",
-    ])
-      assert(!existsSync(join(directory, file)));
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 });
