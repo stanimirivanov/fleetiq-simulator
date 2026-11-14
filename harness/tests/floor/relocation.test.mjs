@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { checkFloor } from "../src/verification/floor.mjs";
+import { checkFloor } from "../../src/verification/floor.mjs";
 
 const oldCoverage = "tools/coverage.mjs";
 const newCoverage = "harness/src/verification/coverage.mjs";

@@ -1,4 +1,12 @@
 const reviewedPaths = new Set([
+  "harness/tests/floor/preservation.test.mjs",
+  "harness/tests/floor/controls.test.mjs",
+  "harness/tests/floor/scripts.test.mjs",
+  "harness/tests/floor/history.test.mjs",
+  "harness/tests/floor/trusted-base.test.mjs",
+  "harness/tests/floor/input-hygiene.test.mjs",
+  "harness/tests/floor/relocation.test.mjs",
+  "harness/support/floor-fixture.mjs",
   "tests/support/processes/spool-crash.ts",
   "tests/support/playback/spool-fixture.ts",
   "tests/support/playback/playback-fixture.ts",
