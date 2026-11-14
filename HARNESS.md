@@ -218,6 +218,24 @@ an own nonempty definition in package.json. Namespacing avoids pnpm built-ins.
 Arguments, comments, redirections, substitutions, alternate operators and
 unknown scripts are rejected. Shell fixtures prove that a failed baseline
 short-circuits the suffix and that added failures still fail the chain.
+M1 also permits exact direct-path substitutions from the fixed `relocations`
+table in `tools/floor.mjs`. It covers reviewed `tools/` gate destinations under
+`harness/src/`, reference-suite paths under `tests/wire/`, `eslint tools` to
+`eslint harness/src`, and quoted recursive product-test globs. Every mapped
+file/directory must exist without symlinked components; operators, arguments and
+unmapped paths cannot change. Candidate JSON/files cannot authorize exceptions.
+Private-package delegation is deliberately not a generic allowance: its concrete
+commands need a separately reviewed exact policy extension when implemented.
+
+Coverage protection follows the directly invoked `test:coverage` policy at
+`tools/coverage.mjs` or `harness/src/verification/coverage.mjs`, across successive
+Git baselines. A strong unused legacy copy cannot mask a weaker active policy.
+Missing/deleted destinations, missing groups and unreadable definitions fail.
+Fixtures without a coverage script must have exactly one recognized policy.
+This PR relocates nothing and changes no live script or workflow entry point.
+Retire the legacy mapping aliases during modularization M8 after callers migrate;
+keep active coverage protection at the final destination.
+
 Added tests and ordinary implementation changes remain allowed.
 
 This is a conservative structural sensor, not a proof of test semantics: it

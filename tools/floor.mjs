@@ -88,6 +88,140 @@ function removedTests(before, after) {
   );
 }
 
+// M1 relocation contract, owned by the trusted checker, never candidate metadata.
+// Retire these legacy aliases in modularization M8 after all callers migrate.
+const relocations = new Map([
+  ["tools/floor.mjs", "harness/src/verification/floor.mjs"],
+  ["tools/coverage.mjs", "harness/src/verification/coverage.mjs"],
+  ["tools/architecture.mjs", "harness/src/architecture/architecture.mjs"],
+  ["tools/secrets.mjs", "harness/src/security/secrets.mjs"],
+  [
+    "tools/fleet-bounds.mjs",
+    "harness/src/qualification/fleet/fleet-bounds.mjs",
+  ],
+  [
+    "tools/platform-decoder.mjs",
+    "harness/src/qualification/platform/platform-decoder.mjs",
+  ],
+  [
+    "tools/image-qualify.mjs",
+    "harness/src/qualification/image/image-qualify.mjs",
+  ],
+  ["tests/codec8-oracle.test.ts", "tests/wire/codec8-oracle.test.ts"],
+  ["tests/udp.test.ts", "tests/wire/udp.test.ts"],
+  ["tests/codec16.test.ts", "tests/wire/codec16.test.ts"],
+  ["tests/codec12.test.ts", "tests/wire/codec12.test.ts"],
+  ["tools", "harness/src"],
+  ["tests/*.test.ts", '"tests/**/*.test.ts"'],
+  ["tests/*.test.mjs", '"tests/**/*.test.mjs"'],
+]);
+const coveragePaths = [
+  "tools/coverage.mjs",
+  "harness/src/verification/coverage.mjs",
+];
+
+/**
+ * Rejects missing or linked components, including a symlinked parent directory.
+ * Constants supply every path; no candidate names or file contents enter diagnostics.
+ * @param {string} root @param {string} path @param {boolean} [directory]
+ */
+function regularDestination(root, path, directory = false) {
+  try {
+    const parts = path.split("/");
+    let current = root;
+    return parts.every((part, index) => {
+      current = join(current, part);
+      const info = lstatSync(current);
+      return index < parts.length - 1 || directory
+        ? info.isDirectory()
+        : info.isFile();
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Accepts only exact token replacements from the reviewed migration contract.
+ * Shell operators/flags cannot change; all mapped destinations must exist. This
+ * deliberately grants no generic private-package delegation or candidate exception.
+ * @param {unknown} before @param {unknown} after @param {string} root
+ */
+function relocatedCommand(before, after, root) {
+  if (typeof before !== "string" || typeof after !== "string") return false;
+  let changed = false;
+  let present = true;
+  const expected = before
+    .split(" ")
+    .map((token) => {
+      const destination = relocations.get(token);
+      if (!destination) return token;
+      changed = true;
+      const glob = token.startsWith("tests/*");
+      present &&= regularDestination(
+        root,
+        glob ? "tests" : destination,
+        glob || token === "tools",
+      );
+      return destination;
+    })
+    .join(" ");
+  return changed && present && after === expected;
+}
+
+/**
+ * Selects the policy actually invoked, refusing ambiguous or unrecognized bindings.
+ * Legacy fixtures without a coverage script must contain exactly one known policy.
+ * @param {Record<string, unknown>} scripts @param {(path: string) => boolean} exists
+ */
+function coveragePath(scripts, exists) {
+  const command = scripts["test:coverage"];
+  if (command !== undefined) {
+    const path = coveragePaths.find(
+      (value) =>
+        typeof command === "string" &&
+        command.split(" && ")[0] === `node ${value}`,
+    );
+    if (!path || !exists(path)) throw new Error("coverage-policy-unreadable");
+    return path;
+  }
+  const paths = coveragePaths.filter(exists);
+  if (paths.length !== 1) throw new Error("coverage-policy-unreadable");
+  return paths[0];
+}
+
+/**
+ * Compares active policies across either layout, even if the legacy file remains.
+ * Missing groups, unreadable files and deleted destinations fail closed. Baseline
+ * thresholds come from Git, never a candidate-supplied manifest or stale shadow.
+ * @param {string} root @param {string} base @param {Set<string>} baseFiles
+ */
+function coverageRetained(root, base, baseFiles) {
+  if (!coveragePaths.some((path) => baseFiles.has(path))) return true;
+  try {
+    const oldScripts = baseFiles.has("package.json")
+      ? (JSON.parse(git(root, ["show", `${base}:package.json`])).scripts ?? {})
+      : {};
+    const newScripts =
+      JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts ??
+      {};
+    const previous = coveragePath(oldScripts, (path) => baseFiles.has(path));
+    const next = coveragePath(newScripts, (path) =>
+      regularDestination(root, path),
+    );
+    if (!previous || !next) return false;
+    const oldFloors = floors(git(root, ["show", `${base}:${previous}`]));
+    const newFloors = floors(readFileSync(join(root, next), "utf8"));
+    return [...oldFloors].every(([name, values]) =>
+      values.every(
+        (value, index) => value <= (newFloors.get(name)?.[index] ?? -1),
+      ),
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Accepts only an unchanged plain command chain followed by extra script calls.
  * Namespaced targets avoid pnpm built-ins; no shell syntax or arguments may be
@@ -394,6 +528,7 @@ export function checkFloor(base, root = ".") {
         if (
           newScripts[name] !== command &&
           !additiveCommand(command, newScripts[name], newScripts) &&
+          !relocatedCommand(command, newScripts[name], root) &&
           !(
             name === "check" &&
             newScripts[name] === `pnpm floor && ${command}` &&
@@ -411,22 +546,9 @@ export function checkFloor(base, root = ".") {
       problems.add("test-disabled-or-focused");
     previousTests.push(...old.tests);
     currentTests.push(...next.tests);
-    if (file === "tools/coverage.mjs" && before) {
-      try {
-        const nextFloors = floors(after);
-        for (const [name, values] of floors(before)) {
-          if (
-            values.some(
-              (value, index) => value > (nextFloors.get(name)?.[index] ?? -1),
-            )
-          )
-            problems.add("coverage-floor-lowered");
-        }
-      } catch {
-        problems.add("coverage-floor-lowered");
-      }
-    }
   }
+  if (!coverageRetained(root, base, baseFiles))
+    problems.add("coverage-floor-lowered");
   if (removedTests(previousTests, currentTests)) problems.add("test-removed");
   return [...problems].sort();
 }
