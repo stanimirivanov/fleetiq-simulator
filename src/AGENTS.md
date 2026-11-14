@@ -13,7 +13,7 @@ session persistence port. Session validates checkpoint state without filesystem 
 `wire/` owns record validation and bytes. `session/` owns policy and
 `transport/` owns handshake and delivery. The CLI composes them. Use explicit relative `.ts` imports so
 Node and the build agree. New top-level source owners require a reviewed
-boundary update in `tools/architecture.mjs`.
+boundary update in `harness/src/architecture/architecture.mjs`.
 
 
 Follow the [shared JS/TS comment standard](../docs/comment-quality.md). Document

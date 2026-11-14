@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: 24.18.0
       - run: npm install --global pnpm@12.5.1 --allow-scripts=pnpm@12.5.1 --strict-allow-scripts
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile && pnpm --dir harness install --frozen-lockfile --ignore-scripts
       - name: Fetch exact public platform source outside the simulator tree
         env:
           PLATFORM_REVISION: bd1cac83b44edef748ec92f9b3142337c7aa1ccc
@@ -28,6 +28,6 @@ jobs:
       - name: Install exact native Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt
       - name: Check adapter formatting
-        run: rustfmt +1.99.1 --check --edition 2024 tools/platform-adapter.rs
+        run: rustfmt +1.99.1 --check --edition 2024 harness/src/qualification/platform/platform-adapter.rs
       - name: Qualify simulator output with the verified platform source
         run: pnpm test:platform "$RUNNER_TEMP/fleetiq-platform"

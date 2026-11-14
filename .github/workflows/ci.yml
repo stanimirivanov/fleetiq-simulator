@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 24.18.0
       - run: npm install --global pnpm@12.5.1 --allow-scripts=pnpm@12.5.1 --strict-allow-scripts
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile && pnpm --dir harness install --frozen-lockfile --ignore-scripts
       - name: Install checksum-pinned Gitleaks
         shell: bash
         run: |
@@ -35,11 +35,13 @@ jobs:
           set -euo pipefail
           [[ "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]]
           git cat-file -e "$BASE_SHA^{commit}"
-          if git cat-file -e "$BASE_SHA:tools/floor.mjs" 2>/dev/null; then
+          if git cat-file -e "$BASE_SHA:harness/src/verification/floor.mjs" 2>/dev/null; then
+            git show "$BASE_SHA:harness/src/verification/floor.mjs" | node --input-type=module - "$BASE_SHA"
+          elif git cat-file -e "$BASE_SHA:tools/floor.mjs" 2>/dev/null; then
             git show "$BASE_SHA:tools/floor.mjs" | node --input-type=module - "$BASE_SHA"
           elif test "$BASE_SHA" = 2f86fa158e7996070257f61d6cdfeb948a041b1b; then
             # One-time introduction against the reviewed H7 merge only.
-            node tools/floor.mjs "$BASE_SHA"
+            node harness/src/verification/floor.mjs "$BASE_SHA"
           else
             echo 'verification-floor: trusted base checker missing; restore baseline history.' >&2
             exit 1

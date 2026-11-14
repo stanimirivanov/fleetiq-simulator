@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 24.18.0
       - run: npm install --global pnpm@12.5.1 --allow-scripts=pnpm@12.5.1 --strict-allow-scripts
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile && pnpm --dir harness install --frozen-lockfile --ignore-scripts
       - name: Install checksum-pinned Gitleaks
         shell: bash
         run: |
@@ -48,7 +48,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_REVISION: ${{ inputs.source_revision }}
-        run: node tools/image-publish.mjs source
+        run: node harness/src/publication/image-publish.mjs source
       - name: Verify source
         run: pnpm check
       - name: Qualify restricted image
@@ -58,4 +58,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GHCR_TOKEN: ${{ github.token }}
           REQUESTED_REVISION: ${{ inputs.source_revision }}
-        run: node tools/image-publish.mjs publish
+        run: node harness/src/publication/image-publish.mjs publish
