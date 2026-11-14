@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { identity } from "./peer.ts";
+import { identity } from "../peers/peer.ts";
 export function playbackConfig(directory: string, port: number) {
   const write = (name: string, value: unknown) =>
     writeFileSync(join(directory, name), JSON.stringify(value), {

@@ -25,7 +25,7 @@ blocks even provisional acceptance; never update expected bytes to hide it.
 
 ## Independent evidence and adaptation
 
-- `tests/codec16-fixture.ts` retains the manufacturer's two-record TCP hex
+- `tests/support/wire/codec16-fixture.ts` retains the manufacturer's two-record TCP hex
   example (CRC 0x5fb3). Its hex has priority 00 although its prose says 01.
   The single-record literal retains the first record exactly; only envelope,
   counts and independent CRC (0x0f89) change. No identity or packet capture is used.
@@ -34,7 +34,7 @@ blocks even provisional acceptance; never update expected bytes to hide it.
   `7e5fe46e604eb095870b6fbe7f018679f4d0a22144e8e32acbbec3d3fa83dee3`.
   `readExtByte` widens event/IO IDs for Codec 16 but widens total/group counts
   only for Codec 8 Extended. `decodeLocation` consumes a generation byte first.
-- `tests/codec16-reference.ts` adapts that fixed-width parsing pattern to a
+- `tests/support/wire/codec16-reference.ts` adapts that fixed-width parsing pattern to a
   standalone test runner with no production imports or new dependencies.
   Position/model mappings are replaced with raw fields; bounds, total and exact
   consumption checks are added. It is **not execution of the full Traccar decoder**

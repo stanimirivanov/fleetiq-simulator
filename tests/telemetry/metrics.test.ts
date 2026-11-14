@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FleetMetrics } from "../src/telemetry.ts";
+import { FleetMetrics } from "../../src/telemetry.ts";
 
 const resource = {
   rssBytes: 1000,

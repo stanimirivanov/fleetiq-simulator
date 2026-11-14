@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Codec8Frame, encodeCodec8, type Record8 } from "../src/wire/codec8.ts";
-import { generatedCorpus } from "./codec8-corpus.ts";
-import { decodeSingleRecord, oracleCrc } from "./codec8-oracle.ts";
-import { singleRecordVectors, twoRecordVector } from "./codec8-vectors.ts";
+import {
+  Codec8Frame,
+  encodeCodec8,
+  type Record8,
+} from "../../src/wire/codec8.ts";
+import { generatedCorpus } from "../support/wire/codec8-corpus.ts";
+import {
+  decodeSingleRecord,
+  oracleCrc,
+} from "../support/wire/codec8-oracle.ts";
+import {
+  singleRecordVectors,
+  twoRecordVector,
+} from "../support/wire/codec8-vectors.ts";
 
 function normalized(record: Record8): Record8 {
   return {

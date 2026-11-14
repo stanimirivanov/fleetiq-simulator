@@ -10,7 +10,7 @@ unsafe ownership/modes, bound reads before parsing, and preserve fixed categorie
 Flush temp → rename → flush directory before returning commit success. Do not add
 production fault controls: the constructor hook exists for crash-boundary tests.
 
-`node --test tests/storage.test.ts tests/spool.test.ts` checks old/new publication,
+`node --test tests/storage/spool.test.ts tests/session/spool.test.ts` checks old/new publication,
 privacy, corruption, concurrent writers and actual process death. The image gate
 must exercise the shipped SQLite/private filesystem path. Follow the shared
 comment standard and keep source inventories/coverage current.

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runFleet } from "../src/transport/fleet.ts";
-import { Codec8Frame } from "../src/wire/codec8.ts";
-import { frame } from "./codec8-fixture.ts";
-import { ack, reader, withPeer } from "./peer.ts";
+import { runFleet } from "../../src/transport/fleet.ts";
+import { Codec8Frame } from "../../src/wire/codec8.ts";
+import { ack, reader, withPeer } from "../support/peers/peer.ts";
+import { frame } from "../support/wire/codec8-fixture.ts";
 
 const bytes = Buffer.from(frame, "hex");
 const device = (n: number) => ({

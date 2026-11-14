@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RecordError } from "../src/wire/codec8.ts";
-import { encodeCodec16 } from "../src/wire/codec16.ts";
-import { record16, single16 } from "./codec16-fixture.ts";
+import { RecordError } from "../../src/wire/codec8.ts";
+import { encodeCodec16 } from "../../src/wire/codec16.ts";
+import { record16, single16 } from "../support/wire/codec16-fixture.ts";
 
 test("Codec 16 matches the literal manufacturer record with one-byte total", () => {
   assert.equal(encodeCodec16(record16).toString("hex"), single16);
@@ -42,9 +42,9 @@ test("Codec 16 requires the provisional profile and rejects invalid or ambiguous
 });
 
 test("manufacturer and Traccar-derived reference agree; contradictory total fails", async () => {
-  const { reference16 } = await import("./codec16-reference.ts");
-  const { manufacturer16 } = await import("./codec16-fixture.ts");
-  const { oracleCrc } = await import("./codec8-oracle.ts");
+  const { reference16 } = await import("../support/wire/codec16-reference.ts");
+  const { manufacturer16 } = await import("../support/wire/codec16-fixture.ts");
+  const { oracleCrc } = await import("../support/wire/codec8-oracle.ts");
   const original = Buffer.from(manufacturer16, "hex");
   assert.equal(original.readUInt32BE(4), original.length - 12);
   assert.equal(oracleCrc(original.subarray(8, -4)), 0x5fb3);
@@ -67,8 +67,8 @@ test("manufacturer and Traccar-derived reference agree; contradictory total fail
 });
 
 test("Codec 16 preserves full-width identifiers and fixed values for every generation", async () => {
-  const { reference16 } = await import("./codec16-reference.ts");
-  const { oracleCrc } = await import("./codec8-oracle.ts");
+  const { reference16 } = await import("../support/wire/codec16-reference.ts");
+  const { oracleCrc } = await import("../support/wire/codec8-oracle.ts");
   for (const generationType of [0, 1, 2, 4, 5, 6, 7]) {
     const io = [
       { id: 256, hex: "01" },

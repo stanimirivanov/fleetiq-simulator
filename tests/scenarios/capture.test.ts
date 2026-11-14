@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { capture } from "../src/scenarios/capture.ts";
-import { createClock } from "../src/scenarios/clock.ts";
-import { createPlayback, ScenarioError } from "../src/scenarios/route.ts";
-import { BatchQueue } from "../src/session/batches.ts";
-import { sessionLimits } from "../src/session/state.ts";
-import { encodeCodec8e } from "../src/wire/codec8e.ts";
+import { capture } from "../../src/scenarios/capture.ts";
+import { createClock } from "../../src/scenarios/clock.ts";
+import { createPlayback, ScenarioError } from "../../src/scenarios/route.ts";
+import { BatchQueue } from "../../src/session/batches.ts";
+import { sessionLimits } from "../../src/session/state.ts";
+import { encodeCodec8e } from "../../src/wire/codec8e.ts";
 
 const profile = JSON.parse(
   readFileSync("profiles/fmb920-docs-v1.json", "utf8"),

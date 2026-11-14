@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { run as runCli, runTcp } from "../../src/cli.ts";
 import { defaultTarget } from "../../src/session/state.ts";
-import { frame, record } from "../codec8-fixture.ts";
+import { frame, record } from "../support/wire/codec8-fixture.ts";
 
 test("CLI reads bounded files, redacts failures and writes private bytes once", () => {
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-codec8-"));
@@ -72,7 +72,9 @@ test("CLI reads bounded files, redacts failures and writes private bytes once", 
 });
 
 test("Codec 16 is an explicit provisional offline profile, never a network selector", async () => {
-  const { record16, single16 } = await import("../codec16-fixture.ts");
+  const { record16, single16 } = await import(
+    "../support/wire/codec16-fixture.ts"
+  );
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-codec16-"));
   try {
     const input = join(directory, "input");

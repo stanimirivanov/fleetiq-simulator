@@ -7,8 +7,8 @@ import {
   encodeCodec8Payload,
   type Record8,
   recordSchema,
-} from "../src/wire/codec8.ts";
-import { frame, record } from "./codec8-fixture.ts";
+} from "../../src/wire/codec8.ts";
+import { frame, record } from "../support/wire/codec8-fixture.ts";
 
 test("encodes Teltonika's literal frame and CRC-16/ARC check value", () => {
   assert.equal(encodeCodec8(record).toString("hex"), frame);

@@ -11,4 +11,4 @@ deadlines; do not combine cold subprocess runs under one timeout.
 `node harness/src/verification/coverage.mjs cli` runs every suite here in the
 existing serial CLI coverage group. Keep that source denominator and threshold
 unchanged. Preserve real subprocess interruption and byte-exact resume checks;
-fixture modules remain under `tests/` without a `.test` suffix.
+fixture modules live under `tests/support/` without a `.test` suffix.

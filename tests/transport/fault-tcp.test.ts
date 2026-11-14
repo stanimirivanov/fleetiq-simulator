@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { test } from "node:test";
-import { sendFaultBatches } from "../src/transport/tcp.ts";
-import { frame } from "./codec8-fixture.ts";
-import { ack, identity, login, reader, withPeer } from "./peer.ts";
+import { sendFaultBatches } from "../../src/transport/tcp.ts";
+import {
+  ack,
+  identity,
+  login,
+  reader,
+  withPeer,
+} from "../support/peers/peer.ts";
+import { frame } from "../support/wire/codec8-fixture.ts";
 
 const bytes = Buffer.from(frame, "hex");
 const spec = (actions: unknown[]) => ({

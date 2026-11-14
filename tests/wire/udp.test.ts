@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Codec8Frame } from "../src/wire/codec8.ts";
-import { combineCodec8e } from "../src/wire/codec8e.ts";
-import { encodeUdp, matchesUdpAck, udpIds } from "../src/wire/udp.ts";
-import { frame } from "./codec8-fixture.ts";
-import { variableFrame } from "./codec8e-fixture.ts";
-import { identity } from "./peer.ts";
+import { Codec8Frame } from "../../src/wire/codec8.ts";
+import { combineCodec8e } from "../../src/wire/codec8e.ts";
+import { encodeUdp, matchesUdpAck, udpIds } from "../../src/wire/udp.ts";
+import { identity } from "../support/peers/peer.ts";
+import { frame } from "../support/wire/codec8-fixture.ts";
+import { variableFrame } from "../support/wire/codec8e-fixture.ts";
 
 // Manufacturer TCP worked-example AVL body, independently placed in its documented UDP layout.
 // Identity is synthetic ASCII; no TCP preamble/length/CRC belongs in this expected datagram.
