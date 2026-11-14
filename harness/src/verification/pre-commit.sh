@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+# The gate reads the worktree. Check that its inputs represent the index.
+if ! git diff --quiet --; then
+  echo 'pre-commit: stage or isolate unstaged tracked changes before verification.' >&2
+  exit 1
+fi
+untracked=$(git ls-files --others --exclude-standard)
+if [ -n "$untracked" ]; then
+  echo 'pre-commit: stage or isolate untracked files before verification.' >&2
+  exit 1
+fi
+pnpm floor
+exec pnpm check:fast

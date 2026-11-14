@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 24.18.0
       - run: npm install --global pnpm@12.5.1 --allow-scripts=pnpm@12.5.1 --strict-allow-scripts
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile && pnpm --dir harness install --frozen-lockfile --ignore-scripts
       - name: Install checksum-pinned Gitleaks
         shell: bash
         run: |

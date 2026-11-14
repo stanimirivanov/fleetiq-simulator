@@ -16,7 +16,7 @@ schemas and Effect for TCP resource lifetime.
 | Handshake, ACK or retries | [Transport guide](src/transport/AGENTS.md) |
 | Product image preparation | [Packaging guide](packaging/AGENTS.md) |
 | Tests or fixtures | [Test guide](tests/AGENTS.md) |
-| Gates, hooks or CI | [Tooling guide](tools/AGENTS.md) and [Harness](HARNESS.md) |
+| Gates, hooks or CI | [Tooling guide](harness/AGENTS.md) and [Harness](HARNESS.md) |
 
 Read [CONSTRAINTS.md](CONSTRAINTS.md) before changing a quality gate or contract.
 Reuse the existing layer boundaries. Use named exports, explicit units and fixed
