@@ -145,3 +145,26 @@ function validate(value: unknown) {
   assert.ok(result);
   assert.deepEqual(result.messages, []);
 });
+
+test("product packaging retains tooling comment-quality enforcement", async () => {
+  const eslint = new ESLint();
+  const [invalid] = await eslint.lintText(
+    "const value = 1;\n// Adjacent comment.\n/** @param {number} input */\nfunction prepare(input) { return input; }",
+    { filePath: "packaging/comment-fixture.mjs" },
+  );
+  assert.ok(
+    invalid?.messages.some(
+      ({ ruleId }) => ruleId === "@stylistic/lines-around-comment",
+    ),
+  );
+  assert.ok(
+    invalid?.messages.some(
+      ({ ruleId }) => ruleId === "jsdoc/require-description",
+    ),
+  );
+  const [valid] = await eslint.lintText(
+    "/** Preserves executable dependency content. */\nfunction prepare(input) { return input; }",
+    { filePath: "packaging/comment-fixture.mjs" },
+  );
+  assert.deepEqual(valid?.messages, []);
+});

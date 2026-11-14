@@ -64,6 +64,11 @@ test("type and lint policy reject invalid test and tooling code", () => {
       join(fixture, "tools/types.mjs"),
       "/** @type {number} */\nexport const value = true;\n",
     );
+    mkdirSync(join(fixture, "packaging"));
+    writeFileSync(
+      join(fixture, "packaging/types.mjs"),
+      "/** @type {number} */\nexport const value = true;\n",
+    );
     const rejected = run("typescript/bin/tsc", [
       "-p",
       "tsconfig.typecheck.json",
@@ -73,6 +78,7 @@ test("type and lint policy reject invalid test and tooling code", () => {
     assert.match(output, /tests\/types\.test\.ts.*TS2322/);
     assert.match(output, /tests\/syntax\.test\.ts.*TS1294/);
     assert.match(output, /tools\/types\.mjs.*TS2322/);
+    assert.match(output, /packaging\/types\.mjs.*TS2322/);
 
     writeFileSync(join(fixture, "src/control.ts"), "export default true;\n");
     const lint = run("@biomejs/biome/bin/biome", [

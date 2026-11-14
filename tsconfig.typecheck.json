@@ -9,6 +9,7 @@
     "src/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.mjs",
-    "tools/**/*.mjs"
+    "tools/**/*.mjs",
+    "packaging/**/*.mjs"
   ]
 }

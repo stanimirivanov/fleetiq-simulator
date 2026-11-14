@@ -5,8 +5,8 @@ RUN npm install --global pnpm@12.5.1 --allow-scripts=pnpm@12.5.1 --strict-allow-
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.json ./
 COPY src ./src
-COPY tools/image-deps.mjs ./tools/image-deps.mjs
-RUN pnpm build && node tools/image-deps.mjs && pnpm prune --prod
+COPY packaging/image-deps.mjs ./packaging/image-deps.mjs
+RUN pnpm build && node packaging/image-deps.mjs && pnpm prune --prod
 
 FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cc66d222f0a7ec996b78a99fe76a969bc80b539a5016ad866c14d1949bc6d0ab
 ARG VCS_REF

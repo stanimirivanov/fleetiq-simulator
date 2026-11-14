@@ -4,7 +4,7 @@ import jsdoc from "eslint-plugin-jsdoc";
 
 export default [
   {
-    files: ["tools/**/*.mjs"],
+    files: ["tools/**/*.mjs", "packaging/**/*.mjs"],
     plugins: { "@stylistic": stylistic, jsdoc },
     rules: {
       "@stylistic/lines-around-comment": [

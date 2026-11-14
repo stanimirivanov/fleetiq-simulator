@@ -14,6 +14,7 @@ schemas and Effect for TCP resource lifetime.
 | Private checkpoint IO | [Storage guide](src/storage/AGENTS.md) |
 | Session settings or budget | [Session guide](src/session/AGENTS.md) |
 | Handshake, ACK or retries | [Transport guide](src/transport/AGENTS.md) |
+| Product image preparation | [Packaging guide](packaging/AGENTS.md) |
 | Tests or fixtures | [Test guide](tests/AGENTS.md) |
 | Gates, hooks or CI | [Tooling guide](tools/AGENTS.md) and [Harness](HARNESS.md) |
 

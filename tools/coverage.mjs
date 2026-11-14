@@ -94,6 +94,13 @@ export const groups = [
     branches: 0,
   },
   {
+    name: "packaging",
+    tests: ["tests/packaging/image-deps.test.mjs"],
+    sources: ["packaging/image-deps.mjs"],
+    lines: 90,
+    branches: 85,
+  },
+  {
     name: "tooling",
     tests: [
       "tests/architecture.test.mjs",
@@ -239,9 +246,14 @@ function main() {
   const tests = listFiles(join(root, "tests"), "tests/").filter((file) =>
     /\.test\.(ts|mjs)$/u.test(file),
   );
-  const sources = listFiles(join(root, "src"), "src/").filter((file) =>
-    file.endsWith(".ts"),
-  );
+  const sources = [
+    ...listFiles(join(root, "src"), "src/").filter((file) =>
+      file.endsWith(".ts"),
+    ),
+    ...listFiles(join(root, "packaging"), "packaging/").filter((file) =>
+      file.endsWith(".mjs"),
+    ),
+  ];
   const problems = checkInventory(groups, tests, sources);
   if (problems.length) {
     process.stderr.write(

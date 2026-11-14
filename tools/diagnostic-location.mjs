@@ -1,4 +1,6 @@
 const reviewedPaths = new Set([
+  "packaging/image-deps.mjs",
+  "tests/packaging/image-deps.test.mjs",
   ".github/workflows/ci.yml",
   ".gitleaks.toml",
   "package.json",
