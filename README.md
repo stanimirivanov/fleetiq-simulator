@@ -47,6 +47,14 @@ up to 64 entries of the form `{"id": 1, "hex": "00"}`; values are exactly 1, 2,
 each group. It derives wire counts, length and CRC. See the
 [Teltonika Codec 8 TCP examples](https://wiki.teltonika-gps.com/view/Codec#Codec_8).
 
+For provisional generic Codec 16 **offline only**, add `"codec": "16"`,
+`"profile": "generic-codec16-provisional"` and `"generationType": 5`. Event/IO
+IDs widen to u16; fixed IO only, unique IDs, at most 64 entries and 255 TCP bytes.
+Generation 3 is reserved. Existing network/device profiles reject this selector.
+See [reference evidence and unresolved count-width conflict](contracts/reference-vectors.md);
+this is not device or firmware conformance. `pnpm test:reference` checks the
+literal vectors and independently adapted reference.
+
 For Codec 8 Extended, add `"codec": "8e"` and `"variableIo": []` to the
 record (including the nested `record` in a run config). Event and IO IDs then
 admit 0–65535; group counts and IDs use two bytes. `io` retains the fixed

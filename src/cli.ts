@@ -33,6 +33,7 @@ import {
 } from "./session/state.ts";
 import { Codec8Frame, RecordError } from "./wire/codec8.ts";
 import { encodeAvlRecord, encodeCodec8e } from "./wire/codec8e.ts";
+import { encodeCodec16 } from "./wire/codec16.ts";
 import { encodeUdp, UdpError, udpIds } from "./wire/udp.ts";
 
 const maxInput = 16 * 1024;
@@ -260,7 +261,17 @@ export function run(
         pinned.close();
       }
     }
-    frame = encodeAvlRecord(value);
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      Object.hasOwn(value, "codec") &&
+      (value as { codec: unknown }).codec === "16"
+    ) {
+      const { codec: _codec, ...record } = value as { codec: unknown };
+      frame = encodeCodec16(record);
+    } else {
+      frame = encodeAvlRecord(value);
+    }
   } catch (error) {
     return reportFailure(error, report);
   }
