@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { buildFleet, FairFleet } from "../src/scenarios/fleet.ts";
-import { Codec8Frame } from "../src/wire/codec8.ts";
-import { frame } from "./codec8-fixture.ts";
+import { buildFleet, FairFleet } from "../../src/scenarios/fleet.ts";
+import { Codec8Frame } from "../../src/wire/codec8.ts";
+import { frame } from "../support/wire/codec8-fixture.ts";
 
 const policy = {
   profile: "product" as const,

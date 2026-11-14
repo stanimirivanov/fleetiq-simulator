@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { createProfile, ProfileError } from "../src/scenarios/profile.ts";
-import { createPlayback, ScenarioError } from "../src/scenarios/route.ts";
-import { encodeCodec8e } from "../src/wire/codec8e.ts";
+import { createProfile, ProfileError } from "../../src/scenarios/profile.ts";
+import { createPlayback, ScenarioError } from "../../src/scenarios/route.ts";
+import { encodeCodec8e } from "../../src/wire/codec8e.ts";
 
 const profile = JSON.parse(
   readFileSync("profiles/fmb920-docs-v1.json", "utf8"),

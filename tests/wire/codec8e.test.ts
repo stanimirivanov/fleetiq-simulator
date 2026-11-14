@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Codec8Frame, RecordError } from "../src/wire/codec8.ts";
+import { Codec8Frame, RecordError } from "../../src/wire/codec8.ts";
 import {
   combineCodec8e,
   encodeAvlRecord,
   encodeCodec8e,
-} from "../src/wire/codec8e.ts";
-import { frame, record } from "./codec8-fixture.ts";
-import { oracleCrc } from "./codec8-oracle.ts";
+} from "../../src/wire/codec8e.ts";
+import { frame, record } from "../support/wire/codec8-fixture.ts";
+import { oracleCrc } from "../support/wire/codec8-oracle.ts";
 import {
   extended,
   extendedFrame,
   variableFrame,
   variableRecord,
-} from "./codec8e-fixture.ts";
+} from "../support/wire/codec8e-fixture.ts";
 
 test("manufacturer Extended vector preserves widths and count fields", () => {
   assert.equal(encodeCodec8e(extended).toString("hex"), extendedFrame);

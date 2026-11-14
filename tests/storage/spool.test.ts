@@ -11,8 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { SpoolError } from "../src/session/spool.ts";
-import { FileStore } from "../src/storage/spool.ts";
+import { SpoolError } from "../../src/session/spool.ts";
+import { FileStore } from "../../src/storage/spool.ts";
 
 test("atomic adapter keeps old/new files at each commit boundary and safely reopens orphan temp", () => {
   for (const stage of ["before-rename", "after-rename", "after-sync"]) {

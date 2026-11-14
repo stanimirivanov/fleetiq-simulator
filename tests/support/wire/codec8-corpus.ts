@@ -1,4 +1,4 @@
-import type { Record8 } from "../src/wire/codec8.ts";
+import type { Record8 } from "../../../src/wire/codec8.ts";
 
 // Fixed-seed generation is reproducible without a new dependency or live data.
 function generator(seed: number): () => number {

@@ -6,14 +6,15 @@ Session may depend on wire contracts and Ajv for closed checkpoint validation. T
 policy and own sockets, framing exchanges and retry execution. Keep session
 independent of transport and the CLI.
 
-Run `node --test tests/tcp.test.ts` for session bounds and TCP behavior.
+Run `node --test tests/session/bounds.test.ts` for session bounds and
+`node --test tests/transport/tcp-acknowledgement.test.ts` for TCP behavior.
 
 
 `batches.ts` owns the bounded FIFO and stable pending handle. Freeze bytes at
 enqueue; peek must not remove data. Acknowledgement reads wire-owned private
 counts and commits removal only for the exact pending handle. `spool.ts` couples FIFO/cursor state to a durable persistence port;
-`storage/` implements atomic file replacement. Verify with `node --test tests/batches.test.ts`.
+`storage/` implements atomic file replacement. Verify with `node --test tests/session/batches.test.ts`.
 
 Checkpoint errors must preserve authoritative bytes and fixed categories. A failed
 write poisons memory; resume revalidates bindings and frozen FIFO bytes before send.
-Use `node --test tests/spool.test.ts` for process death and exact replay.
+Use `node --test tests/session/spool.test.ts` for process death and exact replay.

@@ -3,13 +3,15 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { login, withPeer } from "../peer.ts";
+import { login, withPeer } from "../support/peers/peer.ts";
 
 test("SIGKILL and cooperative SIGTERM preserve uncertain packets for byte-exact resume", {
   timeout: 15000,
 }, async () => {
   const { spawn } = await import("node:child_process");
-  const { playbackConfig } = await import("../playback-fixture.ts");
+  const { playbackConfig } = await import(
+    "../support/playback/playback-fixture.ts"
+  );
   for (const signal of ["SIGKILL", "SIGTERM"] as const) {
     const directory = mkdtempSync(join(tmpdir(), "fleetiq-interrupt-"));
     let online = false;

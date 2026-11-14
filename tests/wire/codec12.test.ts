@@ -4,13 +4,13 @@ import {
   CommandError,
   decodeGetinfo,
   encodeCommandResponse,
-} from "../src/wire/codec12.ts";
-import { oracleCrc } from "./codec8-oracle.ts";
+} from "../../src/wire/codec12.ts";
 import {
   getinfo,
   manufacturerInfo,
   manufacturerResponse,
-} from "./command-peer.ts";
+} from "../support/peers/command-peer.ts";
+import { oracleCrc } from "../support/wire/codec8-oracle.ts";
 
 test("Codec 12 validates manufacturer getinfo and encodes the literal type 06 response", () => {
   assert.equal(decodeGetinfo(getinfo), "getinfo");

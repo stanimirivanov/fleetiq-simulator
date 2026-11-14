@@ -13,12 +13,12 @@ export const groups = [
   {
     name: "wire",
     tests: [
-      "tests/codec8.test.ts",
-      "tests/codec8-oracle.test.ts",
-      "tests/codec8e.test.ts",
-      "tests/codec16.test.ts",
-      "tests/codec12.test.ts",
-      "tests/udp.test.ts",
+      "tests/wire/codec8.test.ts",
+      "tests/wire/codec8-oracle.test.ts",
+      "tests/wire/codec8e.test.ts",
+      "tests/wire/codec16.test.ts",
+      "tests/wire/codec12.test.ts",
+      "tests/wire/udp.test.ts",
     ],
     sources: [
       "src/wire/codec8.ts",
@@ -33,10 +33,10 @@ export const groups = [
   {
     name: "scenarios",
     tests: [
-      "tests/route.test.ts",
-      "tests/capture.test.ts",
-      "tests/faults.test.ts",
-      "tests/fleet.test.ts",
+      "tests/scenarios/route.test.ts",
+      "tests/scenarios/capture.test.ts",
+      "tests/scenarios/faults.test.ts",
+      "tests/scenarios/fleet.test.ts",
     ],
     sources: [
       "src/scenarios/route.ts",
@@ -52,13 +52,18 @@ export const groups = [
   {
     name: "session",
     tests: [
-      "tests/tcp.test.ts",
-      "tests/command.test.ts",
-      "tests/batches.test.ts",
-      "tests/spool.test.ts",
-      "tests/fault-tcp.test.ts",
-      "tests/fleet-tcp.test.ts",
-      "tests/udp-transport.test.ts",
+      "tests/transport/tcp-acknowledgement.test.ts",
+      "tests/transport/tcp-recovery.test.ts",
+      "tests/transport/tcp-deadlines.test.ts",
+      "tests/session/bounds.test.ts",
+      "tests/transport/compose-dns.test.ts",
+      "tests/session/command-state.test.ts",
+      "tests/transport/command-exchange.test.ts",
+      "tests/session/batches.test.ts",
+      "tests/session/spool.test.ts",
+      "tests/transport/fault-tcp.test.ts",
+      "tests/transport/fleet-tcp.test.ts",
+      "tests/transport/udp.test.ts",
     ],
     sources: [
       "src/session/state.ts",
@@ -74,14 +79,14 @@ export const groups = [
   },
   {
     name: "telemetry",
-    tests: ["tests/telemetry.test.ts"],
+    tests: ["tests/telemetry/metrics.test.ts"],
     sources: ["src/telemetry.ts"],
     lines: 90,
     branches: 85,
   },
   {
     name: "storage",
-    tests: ["tests/storage.test.ts"],
+    tests: ["tests/storage/spool.test.ts"],
     sources: ["src/storage/spool.ts"],
     lines: 90,
     branches: 85,

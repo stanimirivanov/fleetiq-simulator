@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { mock, test } from "node:test";
 import { run as runCli, runTcp } from "../../src/cli.ts";
 import { defaultTarget } from "../../src/session/state.ts";
-import { record } from "../codec8-fixture.ts";
-import { identity } from "../peer.ts";
+import { identity } from "../support/peers/peer.ts";
+import { record } from "../support/wire/codec8-fixture.ts";
 
 test("expected input failures preserve their category and precedence", async () => {
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-error-order-"));

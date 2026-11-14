@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { run as runCli, runTcp } from "../../src/cli.ts";
-import { record } from "../codec8-fixture.ts";
-import { identity } from "../peer.ts";
+import { identity } from "../support/peers/peer.ts";
+import { record } from "../support/wire/codec8-fixture.ts";
 
 test("UDP CLI admits only explicit reference peers with private identity and a correlated wire receipt", {
   timeout: 3000,
 }, async () => {
-  const { withUdpPeer } = await import("../udp-peer.ts");
+  const { withUdpPeer } = await import("../support/peers/udp-peer.ts");
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-udp-cli-"));
   try {
     const path = join(directory, "config.json");

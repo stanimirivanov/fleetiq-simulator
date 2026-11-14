@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BatchQueue } from "../src/session/batches.ts";
-import { SessionError } from "../src/session/state.ts";
-import { sendBatches } from "../src/transport/tcp.ts";
-import { variableFrame, variableRecord } from "./codec8e-fixture.ts";
-import { ack, identity, login, withPeer } from "./peer.ts";
+import { BatchQueue } from "../../src/session/batches.ts";
+import { SessionError } from "../../src/session/state.ts";
+import { sendBatches } from "../../src/transport/tcp.ts";
+import { ack, identity, login, withPeer } from "../support/peers/peer.ts";
+import {
+  variableFrame,
+  variableRecord,
+} from "../support/wire/codec8e-fixture.ts";
 
 const options = {
   maxRecords: 2,
