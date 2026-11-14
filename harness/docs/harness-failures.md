@@ -16,15 +16,15 @@ A merged correction is not proof of external ruleset or hardware qualification.
 - **Symptom:** A retained test could acquire a literal computed disabling option without a floor violation.
 - **Root cause:** The sensor recognized dot access and direct property spellings but did not normalize computed literal keys consistently.
 - **Corrective control:** Normalize literal calls/options/context controls without evaluating expressions. Retain false-option and fixture-string passing controls.
-- **Evidence:** [Issue #27](https://github.com/stanimirivanov/fleetiq-simulator/issues/27), [PR #28](https://github.com/stanimirivanov/fleetiq-simulator/pull/28), computed-control Git fixtures in [harness/tests/floor.test.mjs](../tests/floor.test.mjs).
-- **Status:** Correction merged 2026-11-11. Reproduce with `node --test harness/tests/floor.test.mjs`. Arbitrary dynamic expressions remain outside this structural sensor.
+- **Evidence:** [Issue #27](https://github.com/stanimirivanov/fleetiq-simulator/issues/27), [PR #28](https://github.com/stanimirivanov/fleetiq-simulator/pull/28), computed-control Git fixtures in [harness/tests/floor/controls.test.mjs](../tests/floor/controls.test.mjs).
+- **Status:** Correction merged 2026-11-11. Reproduce with `node --test harness/tests/floor/controls.test.mjs`. Arbitrary dynamic expressions remain outside this structural sensor.
 
 ## HF-002: Safe maintenance was rejected as weakened verification
 
 - **Symptom:** A pure literal title rename or an additive verification command failed the floor gate.
 - **Root cause:** Name-only test accounting and exact script equality could not distinguish bounded maintenance from removed protection.
 - **Corrective control:** Consume declarations once, compare complete calls with only the title replaced, and allow narrowly additive namespaced commands. Real shell controls preserve baseline and added-gate failures.
-- **Evidence:** [Issue #29](https://github.com/stanimirivanov/fleetiq-simulator/issues/29), [PR #30](https://github.com/stanimirivanov/fleetiq-simulator/pull/30), rename/duplicate/shell fixtures in [harness/tests/floor.test.mjs](../tests/floor.test.mjs).
+- **Evidence:** [Issue #29](https://github.com/stanimirivanov/fleetiq-simulator/issues/29), [PR #30](https://github.com/stanimirivanov/fleetiq-simulator/pull/30), rename/duplicate fixtures in [preservation](../tests/floor/preservation.test.mjs) and shell fixtures in [script policy](../tests/floor/scripts.test.mjs).
 - **Status:** Correction merged 2026-11-11. Structural preservation does not establish semantic quality or human approval; retained-name edits still need manual assertion review.
 
 ## HF-003: Private paths could enter commits without content findings
@@ -32,7 +32,7 @@ A merged correction is not proof of external ruleset or hardware qualification.
 - **Symptom:** A capture path with innocuous contents could be staged, force-added or already committed without being rejected by filename policy.
 - **Root cause:** Ignore rules and an index-path guard were absent; content scanning cannot identify every sensitive artifact.
 - **Corrective control:** Ignore the prohibited names and inspect the entire NUL-delimited index before candidate contents. Run the floor gate from the hook after index agreement; keep diagnostics filename-free and working copies intact.
-- **Evidence:** [Issue #31](https://github.com/stanimirivanov/fleetiq-simulator/issues/31), [PR #32](https://github.com/stanimirivanov/fleetiq-simulator/pull/32), independent force-add/committed-path/privacy/hook fixtures in [harness/tests/floor.test.mjs](../tests/floor.test.mjs).
+- **Evidence:** [Issue #31](https://github.com/stanimirivanov/fleetiq-simulator/issues/31), [PR #32](https://github.com/stanimirivanov/fleetiq-simulator/pull/32), independent force-add/committed-path/privacy/hook fixtures in [harness/tests/floor/input-hygiene.test.mjs](../tests/floor/input-hygiene.test.mjs).
 - **Status:** Correction merged 2026-11-12. Current-index safeguards do not erase historical copies or replace secret scanning. Operator material still belongs outside the checkout.
 
 ## HF-004: An expired tool cache invalidated local verification evidence
