@@ -54,6 +54,7 @@ export type Failure =
   | "run-timeout"
   | "login-timeout"
   | "login-refused"
+  | "command-timeout"
   | "ack-timeout"
   | "ack-count"
   | "unexpected-reply"
