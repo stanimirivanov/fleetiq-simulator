@@ -7,6 +7,7 @@ import {
 } from "node:net";
 import { Cause, Effect, Exit } from "effect";
 import { planFaults } from "../scenarios/faults.ts";
+import { CommandFixture } from "../session/command.ts";
 import {
   type DeliveryReceipt,
   SessionError,
@@ -15,6 +16,7 @@ import {
   sessionLimits,
 } from "../session/state.ts";
 import { Codec8Frame, FrameError } from "../wire/codec8.ts";
+import { CommandError } from "../wire/codec12.ts";
 
 /**
  * Injectable all-address IPv4 lookup; admission must consider every answer before connecting.
@@ -74,6 +76,7 @@ function readReply(
   timeout: SessionError,
   splitAt: number | null = null,
   closeAfter = false,
+  allowFollowing = false,
 ) {
   return Effect.callback<Buffer, SessionError>((resume) => {
     if (socket.destroyed || socket.readableEnded) {
@@ -108,10 +111,10 @@ function readReply(
         return;
       }
       const available = socket.readableLength;
-      if (available > size - received) {
+      if (available > size - received && !allowFollowing) {
         finish(Effect.fail(new SessionError("unexpected-reply")));
       } else if (available > 0) {
-        const chunk: Buffer = socket.read(available);
+        const chunk: Buffer = socket.read(Math.min(available, size - received));
         received += chunk.copy(reply, received);
         if (received === size) finish(Effect.succeed(reply));
       }
@@ -160,6 +163,7 @@ function exchange(
   limits: SessionLimits,
   splitAt: number | null = null,
   closeAfter = false,
+  allowFollowing = false,
 ) {
   return Effect.gen(function* () {
     const started = limits.now();
@@ -181,6 +185,7 @@ function exchange(
       timeout,
       splitAt,
       closeAfter,
+      allowFollowing,
     ).pipe(
       Effect.timeoutOrElse({
         duration: Math.ceil(wait),
@@ -224,6 +229,86 @@ function openSocket({ host, port }: SessionOptions) {
   );
 }
 
+/**
+ * Receives one bounded command and flushes its synthetic reply within the shared
+ * monotonic budget. The caller has verified the final AVL ACK; scope interruption
+ * removes listeners and closes the socket. Never retries a command exchange.
+ */
+function commandExchange(socket: Socket, limits: SessionLimits) {
+  return Effect.gen(function* () {
+    const remaining = yield* remainingBudget(limits);
+    const wait = Math.min(limits.ackDeadlineMs, remaining);
+    const deadline = limits.now() + wait;
+    const timeout = new SessionError(
+      remaining <= limits.ackDeadlineMs ? "run-timeout" : "command-timeout",
+    );
+    const fixture = new CommandFixture();
+    fixture.avlAcknowledged();
+    yield* Effect.callback<void, SessionError | CommandError>((resume) => {
+      let writing = false;
+      const cleanup = () => {
+        socket.off("readable", readable);
+        socket.off("close", closed);
+        socket.off("end", closed);
+      };
+      const fail = (error: SessionError | CommandError) => {
+        cleanup();
+        resume(Effect.fail(error));
+      };
+      const closed = () => fail(new SessionError("connection-closed"));
+
+      /** Reads only the bounded fixture window; surplus fails without buffering peer data. */
+      const readable = () => {
+        if (limits.now() >= deadline) {
+          fail(timeout);
+          return;
+        }
+        if (writing || socket.readableLength === 0) return;
+        if (socket.readableLength > 27) {
+          fail(new CommandError());
+          return;
+        }
+        const chunk: Buffer = socket.read(socket.readableLength);
+        let response: Buffer | null;
+        try {
+          response = fixture.receive(chunk);
+        } catch (error) {
+          if (error instanceof CommandError) {
+            fail(error);
+            return;
+          }
+          throw error;
+        }
+        if (response) {
+          writing = true;
+          socket.write(response, (error) => {
+            if (error) {
+              fail(new SessionError("connection-closed"));
+              return;
+            }
+            if (limits.now() >= deadline) {
+              fail(timeout);
+              return;
+            }
+            cleanup();
+            resume(Effect.void);
+          });
+        }
+      };
+      socket.on("readable", readable);
+      socket.on("close", closed);
+      socket.on("end", closed);
+      readable();
+      return Effect.sync(cleanup);
+    }).pipe(
+      Effect.timeoutOrElse({
+        duration: Math.ceil(wait),
+        orElse: () => Effect.fail(timeout),
+      }),
+    );
+  });
+}
+
 // A run is bounded to sixteen batches. Wire owns the independent per-frame
 // byte limit and admitted count (one Codec 8 record or up to sixteen Codec 8E records).
 const maxBatches = 16;
@@ -234,13 +319,25 @@ const maxBatches = 16;
  * retrying frozen bytes. Strict mode retires each successful socket; compliant-peer
  * mode may reuse it. ACK loss can duplicate remote acceptance. Returns local ACK
  * counts or throws SessionError; unexpected Effect defects remain internal failures.
+ * The opt-in getinfo fixture allows one strict loopback batch, no retry, and one
+ * bounded command response after its ACK. Product/Compose targets are forbidden.
  */
 export async function sendBatches(
   frames: readonly (Buffer | Codec8Frame)[],
   options: SessionOptions,
+  getinfoFixture?: true,
 ): Promise<DeliveryReceipt> {
   const limits = sessionLimits(options);
   if (frames.length === 0 || frames.length > maxBatches)
+    throw new SessionError("invalid-session");
+  if (
+    getinfoFixture !== undefined &&
+    (getinfoFixture !== true ||
+      options.host === "tcp-ingestion" ||
+      frames.length !== 1 ||
+      limits.maxAttempts !== 1 ||
+      limits.connectionPolicy !== "single-batch")
+  )
     throw new SessionError("invalid-session");
   const frozen = frames.map((frame) => {
     try {
@@ -267,12 +364,21 @@ export async function sendBatches(
         return yield* Effect.fail(new SessionError("login-refused"));
 
       for (const frame of frozen.slice(next)) {
-        const reply = yield* exchange(socket, frame.bytes, 4, limits);
+        const reply = yield* exchange(
+          socket,
+          frame.bytes,
+          4,
+          limits,
+          null,
+          false,
+          getinfoFixture === true,
+        );
         if (reply.readUInt32BE() !== frame.recordCount)
           return yield* Effect.fail(new SessionError("ack-count"));
         acknowledgedRecords += frame.recordCount;
         next++;
         failures = 0;
+        if (getinfoFixture) yield* commandExchange(socket, limits);
         if (limits.connectionPolicy === "single-batch") break;
       }
     }).pipe(Effect.scoped);
@@ -283,6 +389,8 @@ export async function sendBatches(
         while: (error) =>
           Effect.gen(function* () {
             if (
+              getinfoFixture === true ||
+              error instanceof CommandError ||
               error.category === "login-refused" ||
               error.category === "run-timeout" ||
               error.category === "cancelled" ||

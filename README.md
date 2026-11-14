@@ -249,3 +249,27 @@ The explicit `udp` command encapsulates validated AVL bodies and accepts only
 source/ID/count-correlated datagram ACKs from a selected loopback reference peer.
 FleetIQ compatibility targets remain TCP-only. See [the UDP contract](docs/udp.md)
 for private configuration, retry/rollover behavior and qualification limits.
+
+## Read-only command fixture
+
+`node dist/cli.js command-fixture --config /absolute/private/run.json` opts into
+one Codec 12 `getinfo` exchange after a single record's exact AVL ACK. Use the
+ordinary private TCP run-file shape above, a literal loopback target,
+`retry.maxAttempts: 1`, and the default `single-batch` connection policy.
+Playback, UDP, fleet, retries, persistent sessions and the Compose/product target
+are excluded. Ordinary `run` continues to retire its socket after ACK.
+
+The independent server may fragment the request or coalesce it with the final
+ACK. The fixture admits only the 27-byte, type 05, single `getinfo` request with
+valid lengths/counts/CRC; buffers are bounded and the existing per-exchange and
+whole-run deadlines apply. It sends a type 06 response containing only
+`SIMULATOR:read-only`, then closes. It never executes command text, invokes a
+shell, changes configuration, or reads device/system information. Invalid input
+returns `invalid-command` (status 3); missing commands return `command-timeout`.
+Success emits the existing sanitized acknowledgement receipt only after the
+response write completes. This fixture is not installed-product command support
+or physical-device qualification.
+
+Wire literals follow the [manufacturer Codec 12 examples](https://wiki.teltonika-gps.com/view/Teltonika_AVL_Protocols#Codec_12).
+`pnpm test:reference` checks the published request/response vectors; canonical
+`pnpm check` also covers state, independent TCP peer, cancellation and CLI tests.

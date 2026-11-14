@@ -17,12 +17,14 @@ export const groups = [
       "tests/codec8-oracle.test.ts",
       "tests/codec8e.test.ts",
       "tests/codec16.test.ts",
+      "tests/codec12.test.ts",
       "tests/udp.test.ts",
     ],
     sources: [
       "src/wire/codec8.ts",
       "src/wire/codec8e.ts",
       "src/wire/codec16.ts",
+      "src/wire/codec12.ts",
       "src/wire/udp.ts",
     ],
     lines: 90,
@@ -51,6 +53,7 @@ export const groups = [
     name: "session",
     tests: [
       "tests/tcp.test.ts",
+      "tests/command.test.ts",
       "tests/batches.test.ts",
       "tests/spool.test.ts",
       "tests/fault-tcp.test.ts",
@@ -59,6 +62,7 @@ export const groups = [
     ],
     sources: [
       "src/session/state.ts",
+      "src/session/command.ts",
       "src/transport/tcp.ts",
       "src/transport/fleet.ts",
       "src/transport/udp.ts",

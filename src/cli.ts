@@ -33,6 +33,7 @@ import {
 } from "./session/state.ts";
 import { Codec8Frame, RecordError } from "./wire/codec8.ts";
 import { encodeAvlRecord, encodeCodec8e } from "./wire/codec8e.ts";
+import { CommandError } from "./wire/codec12.ts";
 import { encodeCodec16 } from "./wire/codec16.ts";
 import { encodeUdp, UdpError, udpIds } from "./wire/udp.ts";
 
@@ -108,6 +109,10 @@ function reportFailure(
   if (error instanceof ProfileError) {
     report("invalid-profile");
     return 2;
+  }
+  if (error instanceof CommandError) {
+    report("invalid-command");
+    return 3;
   }
   if (error instanceof RecordError) {
     report("invalid-record");
@@ -968,6 +973,8 @@ export async function runTcp(
             ? selectFleet(value)
             : selectRun(value);
     const config = task.config;
+    if (args[0] === "command-fixture" && task.kind !== "record")
+      throw new InputError("invalid-run-config");
     if (args[0] === "resume" && task.kind !== "playback")
       throw new InputError("invalid-run-config");
     const inputRoot =
@@ -1048,14 +1055,18 @@ export async function runTcp(
           sendBatches,
           acknowledge,
         );
-      const receipt = await sendBatches([task.frame], {
-        host: config.target?.host ?? defaultTarget.host,
-        port: config.target?.port ?? defaultTarget.port,
-        ...config.retry,
-        connectionPolicy: task.config.connectionPolicy,
-        identity,
-        signal,
-      });
+      const receipt = await sendBatches(
+        [task.frame],
+        {
+          host: config.target?.host ?? defaultTarget.host,
+          port: config.target?.port ?? defaultTarget.port,
+          ...config.retry,
+          connectionPolicy: task.config.connectionPolicy,
+          identity,
+          signal,
+        },
+        args[0] === "command-fixture" ? true : undefined,
+      );
       acknowledge(receipt);
       return 0;
     } finally {
@@ -1079,6 +1090,7 @@ if (
   const args = process.argv.slice(2);
   const report = (category: string) => process.stderr.write(`${category}\n`);
   if (
+    args[0] === "command-fixture" ||
     args[0] === "run" ||
     args[0] === "resume" ||
     args[0] === "fault" ||
