@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { run as runCli, runTcp } from "../../src/cli.ts";
-import { frame, record } from "../codec8-fixture.ts";
-import { ack, identity, login, withPeer } from "../peer.ts";
+import { ack, identity, login, withPeer } from "../support/peers/peer.ts";
+import { frame, record } from "../support/wire/codec8-fixture.ts";
 
 test("an exhausted run emits no receipt after the peer accepted bytes without an ACK", async () => {
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-no-receipt-"));
@@ -107,7 +107,7 @@ test("Extended CLI validates, encodes and sends the exact NX frame with one ACK"
   timeout: 3000,
 }, async () => {
   const { variableRecord, variableFrame } = await import(
-    "../codec8e-fixture.ts"
+    "../support/wire/codec8e-fixture.ts"
   );
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-extended-"));
   try {

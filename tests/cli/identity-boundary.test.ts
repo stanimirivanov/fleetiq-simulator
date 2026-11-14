@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ack, identity, login, withPeer } from "../peer.ts";
+import { ack, identity, login, withPeer } from "../support/peers/peer.ts";
 
 type IdentityScenario =
   | "parent identity path"

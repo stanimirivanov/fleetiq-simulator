@@ -14,4 +14,8 @@ assertions to reach a pass.
 Register every new test suite and production source in `harness/src/verification/coverage.mjs`.
 The canonical coverage gate executes disjoint wire, session/transport, CLI and
 tooling groups. Keep CLI acceptance cases under `cli/` in focused behavior suites.
-Colocate behavior-specific setup and keep shared data or peer helpers in files without a `.test` suffix.
+Use `wire/`, `scenarios/`, `session/`, `transport/`, `storage/` and `telemetry/`
+for their owning behavior. Colocate behavior-specific setup; shared product
+vectors, peers and playback/process fixtures live under `support/` without a
+`.test` suffix. See the scoped session, transport and support guides before
+changing sockets, recovery or fixtures.

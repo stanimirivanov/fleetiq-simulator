@@ -9,8 +9,8 @@ import {
   sessionLimits,
 } from "../../src/session/state.ts";
 import { encodeCodec8 } from "../../src/wire/codec8.ts";
-import { record } from "../codec8-fixture.ts";
-import { identity } from "../peer.ts";
+import { identity } from "../support/peers/peer.ts";
+import { record } from "../support/wire/codec8-fixture.ts";
 
 test("typed run configurations agree with the closed schema and documented defaults", () => {
   const valid = new Ajv2020({ ownProperties: true }).compile<RunConfig>(

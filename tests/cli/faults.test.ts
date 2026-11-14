@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { run as runCli, runTcp } from "../../src/cli.ts";
-import { frame, record } from "../codec8-fixture.ts";
-import { identity, login, withPeer } from "../peer.ts";
+import { identity, login, withPeer } from "../support/peers/peer.ts";
+import { frame, record } from "../support/wire/codec8-fixture.ts";
 
 test("fault CLI requires separate authorization/command and emits only observation counters", {
   timeout: 3000,

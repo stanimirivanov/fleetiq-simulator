@@ -12,9 +12,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { DurableSpool, SpoolError } from "../src/session/spool.ts";
-import { FileStore } from "../src/storage/spool.ts";
-import { binding, limits, work } from "./spool-fixture.ts";
+import { DurableSpool, SpoolError } from "../../src/session/spool.ts";
+import { FileStore } from "../../src/storage/spool.ts";
+import { binding, limits, work } from "../support/playback/spool-fixture.ts";
 
 function instance() {
   return mkdtempSync(join(tmpdir(), "fleetiq-spool-"));
@@ -159,7 +159,13 @@ test("real SIGKILL at enqueue/send/ACK publication boundaries recovers old or ne
         const marker = join(dir, "ready");
         const child = spawn(
           process.execPath,
-          ["tests/spool-crash.ts", dir, action, stage, marker],
+          [
+            "tests/support/processes/spool-crash.ts",
+            dir,
+            action,
+            stage,
+            marker,
+          ],
           { stdio: "ignore" },
         );
         const exited = once(child, "exit");

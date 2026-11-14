@@ -4,13 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { run as runCli } from "../../src/cli.ts";
-import { login, withPeer } from "../peer.ts";
+import { login, withPeer } from "../support/peers/peer.ts";
 
 test("durable CLI captures through outage and resumes frozen FIFO work without new captures", {
   timeout: 10000,
 }, async () => {
   const { execFile } = await import("node:child_process");
-  const { playbackConfig } = await import("../playback-fixture.ts");
+  const { playbackConfig } = await import(
+    "../support/playback/playback-fixture.ts"
+  );
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-recovery-"));
   let online = false;
   const received: Buffer[] = [];
@@ -87,7 +89,9 @@ test("durable CLI captures through outage and resumes frozen FIFO work without n
 
 test("playback validation checks private inputs offline without creating checkpoint state", async () => {
   const { existsSync } = await import("node:fs");
-  const { playbackConfig } = await import("../playback-fixture.ts");
+  const { playbackConfig } = await import(
+    "../support/playback/playback-fixture.ts"
+  );
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-validate-spool-"));
   try {
     playbackConfig(directory, 55027);

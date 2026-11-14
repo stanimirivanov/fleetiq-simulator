@@ -3,14 +3,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { frame, record } from "../codec8-fixture.ts";
-import { ack, identity, login, withPeer } from "../peer.ts";
+import { ack, identity, login, withPeer } from "../support/peers/peer.ts";
+import { frame, record } from "../support/wire/codec8-fixture.ts";
 
 test("CLI command fixture is explicit, private and emits only an acknowledged receipt", {
   timeout: 3000,
 }, async () => {
   const { execFile } = await import("node:child_process");
-  const { getinfo } = await import("../command-peer.ts");
+  const { getinfo } = await import("../support/peers/command-peer.ts");
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-command-"));
   const observed = Promise.withResolvers<void>();
   try {

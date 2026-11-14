@@ -1,6 +1,6 @@
-import { Codec8Frame } from "../src/wire/codec8.ts";
-import { encodeCodec8e } from "../src/wire/codec8e.ts";
-import { variableRecord } from "./codec8e-fixture.ts";
+import { Codec8Frame } from "../../../src/wire/codec8.ts";
+import { encodeCodec8e } from "../../../src/wire/codec8e.ts";
+import { variableRecord } from "../wire/codec8e-fixture.ts";
 export const binding = {
   config: "1".repeat(64),
   route: "2".repeat(64),

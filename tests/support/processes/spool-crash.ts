@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
-import { DurableSpool } from "../src/session/spool.ts";
-import { FileStore } from "../src/storage/spool.ts";
-import { binding, limits, work } from "./spool-fixture.ts";
+import { DurableSpool } from "../../../src/session/spool.ts";
+import { FileStore } from "../../../src/storage/spool.ts";
+import { binding, limits, work } from "../playback/spool-fixture.ts";
 
 const [directory, action, stage, marker] = process.argv.slice(2);
 if (!directory || !marker) process.exit(2);

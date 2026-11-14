@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { planFaults } from "../src/scenarios/faults.ts";
-import { Codec8Frame, crc16Arc } from "../src/wire/codec8.ts";
-import { encodeCodec8e } from "../src/wire/codec8e.ts";
-import { frame } from "./codec8-fixture.ts";
-import { extended, variableRecord } from "./codec8e-fixture.ts";
-import { identity } from "./peer.ts";
+import { planFaults } from "../../src/scenarios/faults.ts";
+import { Codec8Frame, crc16Arc } from "../../src/wire/codec8.ts";
+import { encodeCodec8e } from "../../src/wire/codec8e.ts";
+import { identity } from "../support/peers/peer.ts";
+import { frame } from "../support/wire/codec8-fixture.ts";
+import { extended, variableRecord } from "../support/wire/codec8e-fixture.ts";
 
 const spec = (actions: unknown[]) => ({
   schemaVersion: 1,

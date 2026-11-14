@@ -67,7 +67,7 @@ checks complement the loopback tests that protect transport semantics.
 
 | Point | Run | Failure action |
 | --- | --- | --- |
-| Edit | `node --test tests/codec8.test.ts` or `node --test tests/tcp.test.ts` | Inspect the failing assertion and reproduce the smallest case |
+| Edit | `node --test tests/wire/codec8.test.ts` or `node --test tests/transport/tcp-acknowledgement.test.ts` | Inspect the failing assertion and reproduce the smallest case |
 | Stage | `pnpm floor && pnpm check:fast` | Remove prohibited indexed paths; fix floor, style, type or import diagnostics |
 | Pre-PR | `pnpm install --frozen-lockfile`, `pnpm check`, then `pnpm security` on the final lockfile | Fix the cause or report a missing tool, unavailable advisory service or other incomplete gate |
 | PR CI | Existing `Simulator verification / check` job runs `pnpm check` | Attach concise, sanitized failure evidence to the task and return to the relevant narrow check |
@@ -309,15 +309,15 @@ and [ruleset review/status requirements](https://docs.github.com/en/repositories
 
 ## Wire oracle and qualification scope
 
-`node --test tests/codec8.test.ts tests/codec8-oracle.test.ts` is the focused
+`node --test tests/wire/codec8.test.ts tests/wire/codec8-oracle.test.ts` is the focused
 wire gate; both suites run once in the canonical wire coverage group.
-`tests/codec8-vectors.ts` cites the two applicable single-record TCP examples
+`tests/support/wire/codec8-vectors.ts` cites the two applicable single-record TCP examples
 from [Teltonika Codec 8](https://wiki.teltonika-gps.com/view/Codec#Codec_8).
 The third literal example retains its manufacturer CRC and proves rejection
 by the current single-record profile. UDP and later-codec fixtures belong to
 those protocol slices; their support is not implied by this oracle.
 
-`tests/codec8-oracle.ts` is test-only and imports no production code, schema,
+`tests/support/wire/codec8-oracle.ts` is test-only and imports no production code, schema,
 layout constants or types. It uses a bounded sequential cursor and an MSB-first
 CRC division with reflected input/output, independent of production's LSB-first
 algorithm. Literal vectors anchor the decoder and encoder. Fixed seeds exercise
@@ -352,7 +352,7 @@ If a future pin adds native dependencies/features, review and update the build
 path explicitly. No platform working source or sibling checkout is changed.
 
 The H9 manufacturer and generated corpus is shared via
-`tests/codec8-corpus.ts`. Every accepted case compares codec, record count,
+`tests/support/wire/codec8-corpus.ts`. Every accepted case compares codec, record count,
 exact decimal timestamp, priority, signed coordinates, raw altitude, angle,
 satellites, speed, event ID, IO order/IDs/widths and every raw value byte.
 Expected output is derived from input records, not the independent decoder.

@@ -3,10 +3,10 @@ import { createSocket } from "node:dgram";
 import { once } from "node:events";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { sendUdp } from "../src/transport/udp.ts";
-import { frame } from "./codec8-fixture.ts";
-import { identity } from "./peer.ts";
-import { withUdpPeer } from "./udp-peer.ts";
+import { sendUdp } from "../../src/transport/udp.ts";
+import { identity } from "../support/peers/peer.ts";
+import { withUdpPeer } from "../support/peers/udp-peer.ts";
+import { frame } from "../support/wire/codec8-fixture.ts";
 
 const bytes = Buffer.from(frame, "hex");
 const options = (port: number) => ({
@@ -174,9 +174,9 @@ test("UDP refuses product/Compose/public targets and bounds silence, cancellatio
 test("UDP IPv6 carries the exact Extended batch count without a separate login", {
   timeout: 3000,
 }, async () => {
-  const { Codec8Frame } = await import("../src/wire/codec8.ts");
-  const { combineCodec8e } = await import("../src/wire/codec8e.ts");
-  const { variableFrame } = await import("./codec8e-fixture.ts");
+  const { Codec8Frame } = await import("../../src/wire/codec8.ts");
+  const { combineCodec8e } = await import("../../src/wire/codec8e.ts");
+  const { variableFrame } = await import("../support/wire/codec8e-fixture.ts");
   const single = Codec8Frame.fromExtendedBytes(
     Buffer.from(variableFrame, "hex"),
   );

@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { run as runCli, runTcp } from "../../src/cli.ts";
-import { ack, identity, login, withPeer } from "../peer.ts";
+import { ack, identity, login, withPeer } from "../support/peers/peer.ts";
 
 test("fleet CLI validates private seeded inputs and emits aggregate outcomes without device labels", {
   timeout: 5000,
 }, async () => {
-  const { playbackConfig } = await import("../playback-fixture.ts");
+  const { playbackConfig } = await import(
+    "../support/playback/playback-fixture.ts"
+  );
   const directory = mkdtempSync(join(tmpdir(), "fleetiq-fleet-cli-"));
   try {
     await withPeer(

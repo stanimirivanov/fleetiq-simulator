@@ -6,9 +6,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createPlayback } from "../../../../src/scenarios/route.ts";
 import { Codec8Frame, encodeCodec8 } from "../../../../src/wire/codec8.ts";
 import { combineCodec8e, encodeCodec8e } from "../../../../src/wire/codec8e.ts";
-import { generatedCorpus } from "../../../../tests/codec8-corpus.ts";
-import { singleRecordVectors } from "../../../../tests/codec8-vectors.ts";
-import { extended, variableRecord } from "../../../../tests/codec8e-fixture.ts";
+import { generatedCorpus } from "../../../../tests/support/wire/codec8-corpus.ts";
+import { singleRecordVectors } from "../../../../tests/support/wire/codec8-vectors.ts";
+import {
+  extended,
+  variableRecord,
+} from "../../../../tests/support/wire/codec8e-fixture.ts";
 
 /** @type {{repository: string, revision: string, rustToolchain: string}} */
 export const pin = JSON.parse(
