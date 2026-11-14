@@ -88,7 +88,14 @@ export const groups = [
   },
   {
     name: "cli",
-    tests: ["tests/cli.test.ts"],
+    tests: [
+      "tests/cli/offline-encoding.test.ts",
+      "tests/cli/configuration.test.ts",
+      "tests/cli/identity-boundary.test.ts",
+      "tests/cli/failure-reporting.test.ts",
+      "tests/cli/delivery-receipts.test.ts",
+      "tests/cli.test.ts",
+    ],
     sources: ["src/cli.ts"],
     lines: 80,
     branches: 0,
