@@ -21,6 +21,7 @@
     "architecture": "node tools/architecture.mjs",
     "floor": "node tools/floor.mjs",
     "test:platform": "node tools/platform-decoder.mjs",
+    "test:reference": "node --test tests/codec8-oracle.test.ts tests/udp.test.ts tests/codec16.test.ts",
     "image:qualify": "node tools/image-qualify.mjs",
     "lint:source-comments": "eslint src",
     "test:bounds": "node tools/fleet-bounds.mjs"
