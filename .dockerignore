@@ -7,6 +7,6 @@
 !src
 !src/**/
 !src/**/*.ts
-!tools/
-!tools/image-deps.mjs
+!packaging/
+!packaging/image-deps.mjs
 !LICENSE

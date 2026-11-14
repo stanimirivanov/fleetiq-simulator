@@ -121,6 +121,15 @@ test("Docker build copies and invokes product packaging without harness tooling"
     new URL("../../Dockerfile", import.meta.url),
     "utf8",
   );
+  const ignore = readFileSync(
+    new URL("../../.dockerignore", import.meta.url),
+    "utf8",
+  );
+  assert.deepEqual(
+    ignore.split("\n").filter((line) => line.startsWith("!packaging")),
+    ["!packaging/", "!packaging/image-deps.mjs"],
+  );
+  assert.doesNotMatch(ignore, /^!(?:tools|harness)(?:\/|$)/m);
   assert.match(
     dockerfile,
     /^COPY packaging\/image-deps\.mjs \.\/packaging\/image-deps\.mjs$/m,
