@@ -13,5 +13,6 @@ assertions to reach a pass.
 
 Register every new test suite and production source in `harness/src/verification/coverage.mjs`.
 The canonical coverage gate executes disjoint wire, session/transport, CLI and
-tooling groups. Keep CLI acceptance cases in `cli.test.ts` and shared data or
-peer helpers in files without a `.test` suffix.
+tooling groups. Keep core CLI acceptance cases under `cli/`; scenario/recovery cases remain
+in `cli.test.ts` until M5. Colocate behavior-specific setup and keep shared data
+or peer helpers in files without a `.test` suffix.
