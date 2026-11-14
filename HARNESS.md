@@ -56,7 +56,7 @@ docs/harness-failures.md   sanitized root causes, controls and evidence
 | CLI | Arguments, files, configuration, redacted output, exit status | Session, wire, scenarios, storage, Ajv, Node fs/path/url/crypto. Runtime transport loads are confined to the network command |
 | Storage | Private checkpoint IO, atomic replacement and exclusive writer lock | Storage, session, Node fs/crypto/sqlite |
 | Session state | Validated settings, monotonic run budget, error categories | Session/wire modules and Ajv checkpoint validation; filesystem effects stay in storage |
-| TCP adapter | Socket lifetime, login, ACK, retries and frozen bytes | Session, wire, pure `scenarios/faults.ts` / `scenarios/fleet.ts`, telemetry, Node net/dns/timers, Effect |
+| Transport adapters | TCP/UDP socket lifetime, correlation, ACK, retries and frozen bytes | Session, wire, pure `scenarios/faults.ts` / `scenarios/fleet.ts`, telemetry, Node net/dgram/dns/timers, Effect |
 | Scenarios | Virtual route position, last sampled fix, model IO and deterministic fault plans | Scenarios, wire and Ajv; no ambient effects |
 | Telemetry | Fixed aggregate counters, histogram buckets and detached resource samples | No imports or ambient effects; IO supplies measured values |
 | Wire | Validated record, AVL payload, TCP envelope and immutable frame metadata | Wire and Ajv |
@@ -418,3 +418,8 @@ so canonical `pnpm check` retains its final live security stage.
 See [the fleet contract](docs/fleet.md) for Linux `/proc`/taskset prerequisites,
 actual one-CPU 2/100-session workloads, memory/FD/CPU measurements, caps and limits
 on the qualification claim. The telemetry group retains 90% lines / 85% branches.
+
+UDP conformance is reference-peer only. `wire/udp.ts` owns framing/strict AVL ACK
+shape, and `transport/udp.ts` owns connected loopback sockets and retry scope.
+See [the UDP contract](docs/udp.md) for literals, endpoint/ID/count correlation,
+rollover, private inputs and the distinction from installed product support.

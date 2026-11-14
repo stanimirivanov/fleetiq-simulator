@@ -114,3 +114,24 @@ test("the canary rejects eager, conditional and transitive transport loads", () 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("unselected UDP validation does not compile during ordinary CLI startup", () => {
+  const script = `
+ import {Ajv2020} from 'ajv/dist/2020.js';
+ const original=Ajv2020.prototype.compile;
+ let udpCompilations=0;
+ Ajv2020.prototype.compile=function(schema){
+   if(schema.required?.includes('packetId'))udpCompilations++;
+   return original.call(this,schema);
+ };
+ await import('./src/cli.ts');
+ process.stdout.write(JSON.stringify({udpCompilations}));
+ `;
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", script],
+    { cwd: root, encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), { udpCompilations: 0 });
+});

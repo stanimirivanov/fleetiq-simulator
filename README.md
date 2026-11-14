@@ -234,3 +234,10 @@ product slots, or up to 100 explicitly authorized reference-peer slots. Retries
 release slots; fixed aggregate metrics distinguish simulated loss and transport
 failures. See [the fleet contract](docs/fleet.md) and [private-run template](scenarios/reconnect-storm.json).
 `pnpm test:bounds` measures actual RSS, FDs and CPU; canonical `pnpm check` includes it.
+
+## UDP reference peer (SIM-PR14)
+
+The explicit `udp` command encapsulates validated AVL bodies and accepts only
+source/ID/count-correlated datagram ACKs from a selected loopback reference peer.
+FleetIQ compatibility targets remain TCP-only. See [the UDP contract](docs/udp.md)
+for private configuration, retry/rollover behavior and qualification limits.

@@ -285,3 +285,21 @@ test("fleet orchestration consumes pure policy and metrics while measurements st
     /layer-import/,
   );
 });
+
+test("UDP sockets belong only to transport and wire UDP stays pure", () => {
+  assert.deepEqual(
+    checkArchitecture(
+      files({
+        "transport/udp.ts": 'import "node:dgram";',
+        "wire/udp.ts": 'import "../wire/codec8.ts";',
+      }),
+    ),
+    [],
+  );
+  for (const owner of ["session/udp.ts", "wire/udp.ts", "cli.ts"]) {
+    assert.match(
+      checkArchitecture(files({ [owner]: 'import "node:dgram";' })).join("\n"),
+      /external-import/,
+    );
+  }
+});

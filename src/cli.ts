@@ -33,6 +33,7 @@ import {
 } from "./session/state.ts";
 import { Codec8Frame, RecordError } from "./wire/codec8.ts";
 import { encodeAvlRecord, encodeCodec8e } from "./wire/codec8e.ts";
+import { encodeUdp, UdpError, udpIds } from "./wire/udp.ts";
 
 const maxInput = 16 * 1024;
 
@@ -109,6 +110,10 @@ function reportFailure(
   }
   if (error instanceof RecordError) {
     report("invalid-record");
+    return 2;
+  }
+  if (error instanceof UdpError) {
+    report("invalid-udp");
     return 2;
   }
   if (error instanceof FleetError) {
@@ -219,6 +224,16 @@ export function run(
   let frame: Buffer;
   try {
     const value = readInput(input);
+    if (command === "validate" && validUdpConfig(value)) {
+      const task = selectUdp(value);
+      const identity = readIdentity(value, dirname(input), true);
+      sessionLimits({ ...value.target, ...value.retry, identity });
+      task.frames.forEach((frame, index) => {
+        const ids = udpIds(value.packetId, value.avlPacketId, index);
+        encodeUdp(frame, identity, ids.packetId, ids.avlPacketId);
+      });
+      return 0;
+    }
     if (command === "validate" && validFleetConfig(value)) {
       const pinned = openPlaybackRoot(input, value);
       try {
@@ -374,6 +389,87 @@ function readAlternate(config: FaultRunConfig, root: string) {
   return config.unregisteredDeviceId
     ? readIdentity({ ...config, deviceId: config.unregisteredDeviceId }, root)
     : undefined;
+}
+
+/** UDP is an explicit loopback reference-peer config, never a FleetIQ compatibility transport. */
+export type UdpRunConfig = Omit<
+  RunConfig,
+  "record" | "target" | "connectionPolicy"
+> & {
+  target: {
+    transport: "udp";
+    profile: "reference-peer";
+    host: "127.0.0.1" | "::1";
+    port: number;
+  };
+  packetId: number;
+  avlPacketId: number;
+  records: Record<string, unknown>[];
+};
+const udpConfigSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "identityFile",
+    "deviceId",
+    "target",
+    "packetId",
+    "avlPacketId",
+    "records",
+  ],
+  properties: {
+    ...faultCommon,
+    target: {
+      type: "object",
+      additionalProperties: false,
+      required: ["transport", "profile", "host", "port"],
+      properties: {
+        transport: { const: "udp" },
+        profile: { const: "reference-peer" },
+        host: { enum: ["127.0.0.1", "::1"] },
+        port: { type: "integer", minimum: 1, maximum: 65535 },
+      },
+    },
+    packetId: { type: "integer", minimum: 0, maximum: 65535 },
+    avlPacketId: { type: "integer", minimum: 0, maximum: 255 },
+    records: {
+      type: "array",
+      minItems: 1,
+      maxItems: 16,
+      items: { type: "object" },
+    },
+  },
+};
+
+let udpValidator: ((value: unknown) => value is UdpRunConfig) | undefined;
+
+/** Compile this mode's closed schema only when UDP is selected; ordinary commands retain their startup budget. */
+function validUdpConfig(value: unknown): value is UdpRunConfig {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("target" in value) ||
+    !value.target ||
+    typeof value.target !== "object" ||
+    !("transport" in value.target) ||
+    value.target.transport !== "udp"
+  )
+    return false;
+  udpValidator ??= new Ajv2020({ ownProperties: true }).compile<UdpRunConfig>(
+    udpConfigSchema,
+  );
+  return udpValidator(value);
+}
+
+/** Encodes only validated record inputs; UDP framing stays wire-owned and identity remains file-only. */
+function selectUdp(value: unknown) {
+  if (!validUdpConfig(value)) throw new InputError("invalid-run-config");
+  return {
+    kind: "udp" as const,
+    config: value,
+    frames: value.records.map(encodeAvlRecord),
+  };
 }
 
 /** Private fleet input uses one shared geometry/profile and explicit independent member seeds/clocks. */
@@ -853,11 +949,13 @@ export async function runTcp(
   try {
     const value = readInput(path);
     const task =
-      args[0] === "fault"
-        ? selectFault(value)
-        : args[0] === "fleet"
-          ? selectFleet(value)
-          : selectRun(value);
+      args[0] === "udp"
+        ? selectUdp(value)
+        : args[0] === "fault"
+          ? selectFault(value)
+          : args[0] === "fleet"
+            ? selectFleet(value)
+            : selectRun(value);
     const config = task.config;
     if (args[0] === "resume" && task.kind !== "playback")
       throw new InputError("invalid-run-config");
@@ -894,8 +992,21 @@ export async function runTcp(
       const identity = readIdentity(
         task.config,
         inputRoot?.root ?? dirname(path),
-        Boolean(inputRoot),
+        Boolean(inputRoot) || task.kind === "udp",
       );
+      if (task.kind === "udp") {
+        const { sendUdp } = await import("./transport/udp.ts");
+        const receipt = await sendUdp(task.frames, {
+          ...task.config.target,
+          ...task.config.retry,
+          identity,
+          signal,
+          packetId: task.config.packetId,
+          avlPacketId: task.config.avlPacketId,
+        });
+        acknowledge(receipt);
+        return 0;
+      }
 
       const { sendBatches, sendFaultBatches } = await import(
         "./transport/tcp.ts"
@@ -960,7 +1071,8 @@ if (
     args[0] === "run" ||
     args[0] === "resume" ||
     args[0] === "fault" ||
-    args[0] === "fleet"
+    args[0] === "fleet" ||
+    args[0] === "udp"
   ) {
     const controller = new AbortController();
     const cancel = () => controller.abort();

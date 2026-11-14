@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { createSocket } from "node:dgram";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -12,6 +13,8 @@ assert.match(readFileSync("/proc/self/status", "utf8"), /^NoNewPrivs:\s+1$/m);
 assert.match(readFileSync("/proc/mounts", "utf8"), /^\S+ \/ \S+ ro[, ]/m);
 const directory = mkdtempSync("/tmp/simulator-");
 const identity = "3".repeat(15);
+const udpPeer = createSocket("udp4");
+let udpBound = false;
 let expectedCodec = 8;
 const record = {
   schemaVersion: 1,
@@ -234,6 +237,61 @@ try {
   assert.equal(fleetOutput.includes("sim-a"), false);
   assert(fleetResult.metrics.peakRssBytes > 0);
   assert(fleetResult.metrics.sampledPeakOpenFds > 0);
+  udpPeer.on("message", (packet, source) => {
+    assert.equal(packet.readUInt16BE(), packet.length - 2);
+    assert.equal(packet.readUInt16BE(2), 7);
+    assert.equal(packet[4], 1);
+    assert.equal(packet[5], 9);
+    assert.equal(packet.readUInt16BE(6), 15);
+    assert.equal(packet.subarray(8, 23).toString(), identity);
+    assert.equal(packet[23], 8);
+    assert.equal(packet[24], 1);
+    assert.equal(packet.at(-1), 1);
+    udpPeer.send(
+      Buffer.from("00050007010901", "hex"),
+      source.port,
+      source.address,
+    );
+  });
+  udpPeer.bind(0, "127.0.0.1");
+  await once(udpPeer, "listening");
+  udpBound = true;
+  writeFileSync(
+    `${directory}/udp.json`,
+    JSON.stringify({
+      schemaVersion: 1,
+      identityFile: "identities.json",
+      deviceId: "sim-a",
+      target: {
+        transport: "udp",
+        profile: "reference-peer",
+        host: "127.0.0.1",
+        port: udpPeer.address().port,
+      },
+      packetId: 7,
+      avlPacketId: 9,
+      records: [record],
+      retry: { maxAttempts: 1, ackDeadlineMs: 3000, totalDeadlineMs: 5000 },
+    }),
+    { mode: 0o600 },
+  );
+  const udpChild = spawn(
+    process.execPath,
+    ["/app/dist/cli.js", "udp", "--config", `${directory}/udp.json`],
+    { timeout: 10000, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let udpOutput = "",
+    udpError = "";
+  udpChild.stdout.on("data", (data) => {
+    udpOutput += data;
+  });
+  udpChild.stderr.on("data", (data) => {
+    udpError += data;
+  });
+  const [udpCode] = await once(udpChild, "close");
+  assert.equal(udpCode, 0);
+  assert.equal(udpError, "");
+  assert.equal(udpOutput, '{"status":"acknowledged","recordCount":1}\n');
   const storageModule = "/app/dist/storage/spool.js";
 
   /** @type {typeof import("../src/storage/spool.ts")} */
@@ -254,6 +312,7 @@ try {
   }
   console.log("image-runtime-ok");
 } finally {
+  if (udpBound) udpPeer.close();
   server.close();
   rmSync(directory, { recursive: true, force: true });
 }
