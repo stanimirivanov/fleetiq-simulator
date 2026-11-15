@@ -1,7 +1,8 @@
 # Verification-floor self-tests
 
 Keep preservation and renames, computed controls, script policy, baseline/history,
-trusted-base execution, input hygiene and reviewed relocations in their named
+trusted-base execution, input hygiene, reviewed relocations and exact harness
+command transitions in their named
 suites. Retain positive controls alongside violations and leave assertion logic
 in each suite. Synthetic source text is fixture data, not executable guidance.
 

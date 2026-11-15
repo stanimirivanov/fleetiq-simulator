@@ -1,4 +1,5 @@
 const reviewedPaths = new Set([
+  "harness/tests/floor/command-transitions.test.mjs",
   "harness/tests/floor/preservation.test.mjs",
   "harness/tests/floor/controls.test.mjs",
   "harness/tests/floor/scripts.test.mjs",
