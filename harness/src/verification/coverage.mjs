@@ -120,7 +120,9 @@ export const groups = [
   {
     name: "tooling",
     tests: [
-      "harness/tests/architecture.test.mjs",
+      "harness/tests/architecture/dependencies.test.mjs",
+      "harness/tests/architecture/purity-effects.test.mjs",
+      "harness/tests/architecture/diagnostics.test.mjs",
       "harness/tests/harness-boundary.test.mjs",
       "harness/tests/comments.test.mjs",
       "harness/tests/coverage.test.mjs",
