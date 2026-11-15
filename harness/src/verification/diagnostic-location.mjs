@@ -1,4 +1,10 @@
 const reviewedPaths = new Set([
+  "harness/tests/workflows/policy.test.mjs",
+  "harness/tests/workflows/history-ownership.test.mjs",
+  "harness/tests/workflows/platform.test.mjs",
+  "harness/tests/workflows/pin-parity.test.mjs",
+  "harness/tests/workflows/pin-policy.mjs",
+  "harness/support/workflow-fixture.mjs",
   "harness/tests/floor/retirement.test.mjs",
   "harness/tests/floor/command-transitions.test.mjs",
   "harness/tests/floor/preservation.test.mjs",
