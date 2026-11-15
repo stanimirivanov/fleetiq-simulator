@@ -45,7 +45,6 @@ harness/
   docs/                    canonical standards and failure learning
 .github/workflows/         provider installation and invocation wiring
 .githooks/pre-commit       thin adapter to harness hook policy
-HARNESS.md, CONSTRAINTS.md temporary documentation adapters, retired in M8
 ```
 
 | Owner | State or effects owned | Allowed production dependencies |
@@ -223,23 +222,12 @@ an own nonempty definition in package.json. Namespacing avoids pnpm built-ins.
 Arguments, comments, redirections, substitutions, alternate operators and
 unknown scripts are rejected. Shell fixtures prove that a failed baseline
 short-circuits the suffix and that added failures still fail the chain.
-M1 also permits exact direct-path substitutions from the fixed `relocations`
-table in `harness/src/verification/floor.mjs`. It covers reviewed `tools/` gate destinations under
-`harness/src/`, reference-suite paths under `tests/wire/`, `eslint tools` to
-`eslint harness/src`, and quoted recursive product-test globs. Every mapped
-file/directory must exist without symlinked components; operators, arguments and
-unmapped paths cannot change. Candidate JSON/files cannot authorize exceptions.
-Private-package delegation is deliberately not a generic allowance: its concrete
-commands need a separately reviewed exact policy extension when implemented.
-
-Coverage protection follows the directly invoked `test:coverage` policy at
-`tools/coverage.mjs` or `harness/src/verification/coverage.mjs`, across successive
-Git baselines. A strong unused legacy copy cannot mask a weaker active policy.
-Missing/deleted destinations, missing groups and unreadable definitions fail.
-Fixtures without a coverage script must have exactly one recognized policy.
-This PR relocates nothing and changes no live script or workflow entry point.
-Retire the legacy mapping aliases during modularization M8 after callers migrate;
-keep active coverage protection at the final destination.
+The M1 legacy token substitutions and flat discovery aliases are retired. Only
+the reviewed M8 root-to-private-package command contract below remains; arbitrary
+private-package delegation is rejected. Coverage protection reads the active
+`harness/src/verification/coverage.mjs` binding, across successive Git baselines.
+Legacy shadows cannot mask lower or missing current coverage definitions.
+Active direct gate destinations must be regular files without linked parents.
 
 Added tests and ordinary implementation changes remain allowed.
 
@@ -251,10 +239,9 @@ inspect the diff privately rather than publishing candidate text or filenames.
 
 PR CI passes the event's exact base SHA and runs **that base's** `floor.mjs`
 through Node stdin before candidate verification. Candidate edits cannot replace
-the already-merged checker. Introduction is allowed only against H7 merge
-`2f86fa158e7996070257f61d6cdfeb948a041b1b`; any other missing base checker fails.
-The bootstrap branch becomes unreachable once H8 is the base. The scheduled
-security workflow is unchanged. Local execution uses candidate tooling; the
+the already-merged checker. Missing canonical base checker history fails; the
+introduction-SHA and legacy-path fallbacks are retired. The scheduled security
+workflow is unchanged. Local execution uses candidate tooling; the
 workflow itself, parser dependency and other harness changes still require review.
 
 `.github/CODEOWNERS` assigns verification inputs, tests, guides and ownership
@@ -458,23 +445,31 @@ checks exact suite/source inventory and measured fleet bounds, and audits both
 lockfiles. Product `pnpm test` discovers only product suites; the canonical
 coverage runner also discovers `harness/tests/` and executes each suite once.
 
-Verification/qualification/publication code, self-test fixtures, policy config
-and canonical harness documentation live under `harness/`. Root workflows keep
-provider configuration and pinned tool installation; hooks/configuration/docs
-are thin integration adapters. Production source, packaging and behavior tests
-cannot import harness or legacy tools; the architecture gate enforces that
-one-way edge and an isolated fixture builds/validates the product without either
-tree. Harness adapters may consume product APIs and independent wire vectors.
+Verification, qualification, publication, self-tests and policy configuration live
+under `harness/`. Root workflows and hooks are explicit integration points. Root
+retains product runtime dependencies plus TypeScript and Node types; harness-only
+tools are installed by the private package. Shared build/type pins remain equal.
 
-M8 retirement: remove remaining root tool-only dependency declarations, root
-ESLint/Biome and documentation adapters, obsolete tools ownership entries and
-M1 legacy aliases once all consumers migrate. Root command paths use the exact
-M1 move contract; private-package commands receive no generic floor bypass.
-The floor protects both package manifests after this baseline is merged.
+The product-only isolation regression copies source, packaging, tests, profiles,
+contracts and product manifests/configuration to a temporary directory. It uses
+the bootstrapped content-addressed pnpm store for a frozen offline install into
+its own dependency tree, then builds, typechecks, executes every product suite
+serially and validates the emitted CLI. It does not copy harness files or borrow
+repository `node_modules`. Missing configured harness gates must fail. Populate
+the store through the normal frozen installs before verification; old partial
+local stores can be refreshed with `pnpm fetch`, followed by `pnpm install
+--frozen-lockfile --ignore-scripts` to restore top-level dependency links.
 
-PR CI selects the relocated checker from the exact event base when present,
-otherwise the legacy base checker. Candidate checker changes cannot replace
-either trusted version. The original one-time bootstrap SHA remains exact.
+To replace/remove the harness, update root verification scripts, workflow/hook
+invocations and the guide links. Product `pnpm build`, native behavior tests and
+the product type configuration remain independent. The canonical runner still
+owns coverage inventories and thresholds. The second product execution in the
+isolation fixture deliberately qualifies a different dependency environment.
+
+PR CI always extracts the merged harness checker from the exact event base.
+Missing trusted checker history fails; legacy tools and introduction-SHA bootstrap
+fallbacks have been removed. The retired-contract fixtures keep historical test
+identities while checking canonical bindings and rejecting legacy aliases.
 
 ## M8 command transition prerequisite
 
@@ -499,11 +494,9 @@ and preserve the comment/packaging stages. Typechecking retains the product
 command and adds the harness's existing `tsc -p config/tsconfig.json` gate.
 The comment-lint target also covers shared harness support.
 
-This prerequisite activates none of those commands and changes no dependency or
-configuration. M8 must install the matching scripts/configuration, prove product
-build and tests with a product-only dependency tree, remove compatibility bridges,
-and run canonical plus image/platform qualification. Matching these strings does
-not establish the semantic quality of configuration contents or replace those gates.
+M8 activates these commands and their configuration. Matching these strings does
+not establish the semantic quality of configuration contents or replace product
+isolation, canonical, image and platform qualification.
 Existing arbitrary-delegation and missing-tool failures remain errors.
 
 `node --test harness/tests/floor/command-transitions.test.mjs` exercises the

@@ -129,11 +129,11 @@ function verify(document, scheduled) {
     });
     assert.match(
       values[5].run,
-      /git show "\$BASE_SHA:tools\/floor\.mjs" \| node --input-type=module - "\$BASE_SHA"/,
+      /git show "\$BASE_SHA:harness\/src\/verification\/floor\.mjs" \| node --input-type=module - "\$BASE_SHA"/,
     );
-    assert.match(
+    assert.doesNotMatch(
       values[5].run,
-      /elif test "\$BASE_SHA" = 2f86fa158e7996070257f61d6cdfeb948a041b1b/,
+      /BASE_SHA:tools\/floor\.mjs|elif test "\$BASE_SHA"|One-time introduction/,
     );
   }
   assert.equal(values.at(-1).run, scheduled ? "pnpm security" : "pnpm check");
@@ -268,18 +268,13 @@ test("verification inputs and the ownership policy have a maintainer owner", () 
   for (const path of [
     "/.github/",
     "/.githooks/",
-    "/tools/",
     "/tests/",
     "/**/AGENTS.md",
-    "/CONSTRAINTS.md",
-    "/HARNESS.md",
-    "/docs/harness-failures.md",
+    "/harness/",
+    "/packaging/",
     "/package.json",
     "/pnpm-lock.yaml",
     "/tsconfig*.json",
-    "/biome.json",
-    "/eslint.config.mjs",
-    "/.gitleaks.toml",
     "/.gitignore",
   ])
     assert.ok(

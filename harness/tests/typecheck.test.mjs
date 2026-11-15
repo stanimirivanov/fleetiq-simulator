@@ -22,7 +22,6 @@ test("type and lint policy reject invalid test and tooling code", () => {
       "package.json",
       "tsconfig.json",
       "tsconfig.typecheck.json",
-      "biome.json",
     ]) {
       const source = join(root, file);
       copyFileSync(source, join(fixture, file));
@@ -30,6 +29,11 @@ test("type and lint policy reject invalid test and tooling code", () => {
     cpSync(join(root, "harness/config"), join(fixture, "harness/config"), {
       recursive: true,
     });
+    symlinkSync(
+      join(root, "harness/node_modules"),
+      join(fixture, "harness/node_modules"),
+      "dir",
+    );
     mkdirSync(join(fixture, "node_modules"));
     symlinkSync(
       join(root, "node_modules", "@types"),
@@ -37,14 +41,14 @@ test("type and lint policy reject invalid test and tooling code", () => {
     );
     mkdirSync(join(fixture, "src"));
     mkdirSync(join(fixture, "tests"));
-    mkdirSync(join(fixture, "tools"));
+    mkdirSync(join(fixture, "harness/src"), { recursive: true });
     const run = (
       /** @type {string} */ executable,
       /** @type {string[]} */ args,
     ) =>
       spawnSync(
         process.execPath,
-        [join(root, "node_modules", executable), ...args],
+        [join(root, "harness/node_modules", executable), ...args],
         {
           cwd: fixture,
           encoding: "utf8",
@@ -56,6 +60,24 @@ test("type and lint policy reject invalid test and tooling code", () => {
       join(fixture, "src/control.ts"),
       "export const control = true;\n",
     );
+    const productControl = run("typescript/bin/tsc", [
+      "-p",
+      "tsconfig.typecheck.json",
+    ]);
+    assert.equal(
+      productControl.status,
+      0,
+      productControl.stdout + productControl.stderr,
+    );
+    const harnessControl = run("typescript/bin/tsc", [
+      "-p",
+      "harness/config/tsconfig.json",
+    ]);
+    assert.equal(
+      harnessControl.status,
+      0,
+      harnessControl.stdout + harnessControl.stderr,
+    );
     writeFileSync(
       join(fixture, "tests/types.test.ts"),
       'export const value: number = "invalid";\n',
@@ -65,7 +87,7 @@ test("type and lint policy reject invalid test and tooling code", () => {
       "export enum Runtime { Value }\n",
     );
     writeFileSync(
-      join(fixture, "tools/types.mjs"),
+      join(fixture, "harness/src/types.mjs"),
       "/** @type {number} */\nexport const value = true;\n",
     );
     mkdirSync(join(fixture, "packaging"));
@@ -81,7 +103,15 @@ test("type and lint policy reject invalid test and tooling code", () => {
     assert.equal(rejected.status, 2, output);
     assert.match(output, /tests\/types\.test\.ts.*TS2322/);
     assert.match(output, /tests\/syntax\.test\.ts.*TS1294/);
-    assert.match(output, /tools\/types\.mjs.*TS2322/);
+    const tooling = run("typescript/bin/tsc", [
+      "-p",
+      "harness/config/tsconfig.json",
+    ]);
+    assert.equal(tooling.status, 2, tooling.stdout + tooling.stderr);
+    assert.match(
+      tooling.stdout + tooling.stderr,
+      /harness\/src\/types\.mjs.*TS2322/,
+    );
     assert.match(output, /packaging\/types\.mjs.*TS2322/);
 
     writeFileSync(join(fixture, "src/control.ts"), "export default true;\n");
@@ -89,6 +119,7 @@ test("type and lint policy reject invalid test and tooling code", () => {
       "ci",
       "src/control.ts",
       "--error-on-warnings",
+      "--config-path=harness/config/biome.json",
     ]);
     assert.equal(lint.status, 1, lint.stdout + lint.stderr);
     assert.match(lint.stdout + lint.stderr, /noDefaultExport/);

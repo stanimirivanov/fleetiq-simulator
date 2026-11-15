@@ -50,13 +50,15 @@ ancestor SHA reproduces PR results. Preserve base-revision execution in PR CI
 and its exact-SHA bootstrap restriction. Add Git fixtures when changing the
 floor sensor. Never add a self-approved bypass or print candidate comment/test
 text. CODEOWNERS and the external main ruleset govern deliberate policy changes;
-see HARNESS.md for qualification and intentional-maintenance procedures.
+see docs/HARNESS.md for qualification and intentional-maintenance procedures.
 
 
 The private package owns verification, qualification, publication, configuration
 and self-tests. Product imports must never depend on it or legacy tools. Run
 `pnpm --dir harness test` for self-tests; `pnpm check` remains authoritative and
 executes every product/harness suite once through the coverage inventory.
-Root tool dependency declarations and thin configuration/documentation adapters
-remain compatibility wiring until M8. Their pins must match this package; do not
-add generic floor-delegation exceptions or missing-tool fallbacks.
+Root retains only TypeScript and Node types for product build and tests.
+Verification tools and configuration belong to this package; root commands use
+reviewed delegates. Preserve shared TypeScript/Node type pin parity. Removing the
+harness requires changing documented integration points; configured gates must
+fail when it is absent. Do not add missing-tool fallbacks.

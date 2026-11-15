@@ -26,8 +26,8 @@ separate local, hosted, installed-product and physical-device evidence.
 | --- | --- | --- |
 | | | |
 
-Use the current commands and quality floor in [HARNESS.md](https://github.com/stanimirivanov/fleetiq-simulator/blob/main/HARNESS.md) and
-[CONSTRAINTS.md](https://github.com/stanimirivanov/fleetiq-simulator/blob/main/CONSTRAINTS.md); do not copy version or threshold pins here.
+Use the current commands and quality floor in [HARNESS.md](https://github.com/stanimirivanov/fleetiq-simulator/blob/main/harness/docs/HARNESS.md) and
+[CONSTRAINTS.md](https://github.com/stanimirivanov/fleetiq-simulator/blob/main/harness/docs/CONSTRAINTS.md); do not copy version or threshold pins here.
 
 ## Maintainer review and policy changes
 

@@ -133,6 +133,7 @@ export const groups = [
       "harness/tests/floor/input-hygiene.test.mjs",
       "harness/tests/floor/relocation.test.mjs",
       "harness/tests/floor/command-transitions.test.mjs",
+      "harness/tests/floor/retirement.test.mjs",
       "harness/tests/image.test.mjs",
       "harness/tests/image-publish.test.mjs",
       "harness/tests/platform-decoder.test.mjs",

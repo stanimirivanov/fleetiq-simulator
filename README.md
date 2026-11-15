@@ -1,14 +1,14 @@
 # FleetIQ simulator
 
 For repository boundaries, agent instructions and verification commands, see
-[AGENTS.md](AGENTS.md) and the [coding harness](HARNESS.md).
+[AGENTS.md](AGENTS.md) and the [coding harness](harness/docs/HARNESS.md).
 
 The simulator validates a versioned Codec 8 or Codec 8 Extended record offline or sends it to an
 authorized local TCP listener using a private device identity file.
 
 Linux is the supported runtime. Use the Node and pnpm pins in
 [package.json](package.json) and the scanner release defined in
-[tools/secrets.mjs](tools/secrets.mjs). The
+[secret scanner](harness/src/security/secrets.mjs). The
 [CI workflow](.github/workflows/ci.yml) contains the Linux x64 scanner checksum.
 Confirm actual tool versions against those definitions before verification.
 
@@ -75,8 +75,8 @@ while the offline encoders retain exact u64 values.
 
 `pnpm check` enforces the verification floor, style, strict types, architecture,
 build, tests, coverage, redacted secret scanning and current dependency advisories.
-The quality thresholds are defined in [CONSTRAINTS.md](CONSTRAINTS.md).
-[tools/coverage.mjs](tools/coverage.mjs) enforces them in separate wire,
+The quality thresholds are defined in [CONSTRAINTS.md](harness/docs/CONSTRAINTS.md).
+[coverage runner](harness/src/verification/coverage.mjs) enforces them in separate wire,
 session/transport and CLI groups, with exact suite/source inventories.
 
 ## Send one record over TCP

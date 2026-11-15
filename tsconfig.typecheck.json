@@ -9,11 +9,6 @@
     "src/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.mjs",
-    "tools/**/*.mjs",
-    "packaging/**/*.mjs",
-    "harness/src/**/*.mjs",
-    "harness/tests/**/*.mjs",
-    "harness/support/**/*.mjs",
-    "harness/config/**/*.mjs"
+    "packaging/**/*.mjs"
   ]
 }
