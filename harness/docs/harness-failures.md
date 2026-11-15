@@ -49,7 +49,7 @@ A merged correction is not proof of external ruleset or hardware qualification.
 - **Symptom:** Merged Codec 8/8E exports and other source contracts lacked declaration documentation while canonical lint passed.
 - **Root cause:** ESLint selected only `tools/**/*.mjs`; TypeScript source had no matching parser/configuration. Scoped guides described invariants without an enforceable declaration policy.
 - **Corrective control:** Add a pinned TypeScript parser, explicit source declaration contexts, descriptive-summary and comment-spacing checks. Route the new source gate through existing fast/canonical validation; document all five source modules and retain semantic review.
-- **Evidence:** [Issue #45](https://github.com/stanimirivanov/fleetiq-simulator/issues/45), ignored-source RED fixtures and passing/failing declaration controls in [harness/tests/comments.test.mjs](../tests/comments.test.mjs).
+- **Evidence:** [Issue #45](https://github.com/stanimirivanov/fleetiq-simulator/issues/45), ignored-source RED fixtures and passing/failing declaration controls in [harness/tests/verification/comments.test.mjs](../tests/verification/comments.test.mjs).
 - **Status:** Local correction under review. Lint cannot determine whether prose is accurate or useful; no external ruleset qualification is implied.
 
 ## HF-006: Sequential CLI startups shared one deadline

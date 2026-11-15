@@ -37,7 +37,7 @@ claiming validation or acceptance that the implementation does not provide.
 - `pnpm lint:comments` retains the existing tooling policy. Both commands run
   through `pnpm lint`, `pnpm check:fast` and canonical `pnpm check`, covering the
   opt-in pre-commit hook and required-check workflow.
-- `node --test harness/tests/comments.test.mjs` tests passing and failing controls,
+- `node --test harness/tests/verification/comments.test.mjs` tests passing and failing controls,
   including TypeScript syntax, short public declarations, named helpers and
   comments on exported constants.
 
