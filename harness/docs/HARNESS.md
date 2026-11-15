@@ -450,6 +450,22 @@ under `harness/`. Root workflows and hooks are explicit integration points. Root
 retains product runtime dependencies plus TypeScript and Node types; harness-only
 tools are installed by the private package. Shared build/type pins remain equal.
 
+The product boundary inspects actual dependency syntax in `src`, `tests` and
+`packaging`: static imports/re-exports, import types, dynamic imports and direct
+`require` calls. It rejects harness/private-package and legacy-tool dependencies,
+computed loads, absolute filesystem specifiers, `file:` URLs and relative paths
+that normalize outside the repository. Normal local modules, packages and Node
+builtins remain permitted, subject to the existing layer allowlists.
+
+Executable dependencies on `node:module` or `module` are forbidden, including
+renamed or namespace imports: module factories such as `createRequire` would
+otherwise hide dependencies behind aliases. Use statically inspectable dependency
+syntax instead. Quoted fixture source is ordinary data and remains permitted.
+Failures retain the fixed `product-harness-import` category without echoing
+specifier values or source text. This is a closed-loader dependency policy, not
+an OS sandbox or proof against arbitrary JavaScript execution; it deliberately
+avoids general data-flow analysis. Harness tools can still consume product APIs.
+
 The product-only isolation regression copies source, packaging, tests, profiles,
 contracts and product manifests/configuration to a temporary directory. It uses
 the bootstrapped content-addressed pnpm store for a frozen offline install into
