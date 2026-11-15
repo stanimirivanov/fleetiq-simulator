@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 test("type and lint policy reject invalid test and tooling code", () => {
   const fixture = mkdtempSync(join(tmpdir(), "fleetiq-typecheck-"));
-  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const root = fileURLToPath(new URL("../../..", import.meta.url));
   try {
     for (const file of [
       "package.json",

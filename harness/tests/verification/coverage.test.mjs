@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
-import { checkInventory, groups } from "../src/verification/coverage.mjs";
+import { checkInventory, groups } from "../../src/verification/coverage.mjs";
 
 test("every test and source belongs to exactly one coverage group", () => {
   const tests = groups.flatMap((group) => group.tests);
@@ -109,5 +109,48 @@ choose(true);
     assert.match(uncovered.stderr, /coverage-threshold/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("coverage thresholds reject an uncovered branch", () => {
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-coverage-"));
+  try {
+    const fixture = join(directory, "fixture.ts");
+    const driver = join(directory, "driver.test.mjs");
+    writeFileSync(
+      driver,
+      'import { choose } from "./fixture.ts";\nchoose(true);\n',
+    );
+    const command = [
+      "--test",
+      "--experimental-test-coverage",
+      "--test-coverage-branches=85",
+      "--test-coverage-include=fixture.ts",
+      "driver.test.mjs",
+    ];
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const run = () =>
+      spawnSync(process.execPath, command, {
+        cwd: directory,
+        encoding: "utf8",
+        env,
+      });
+    const source =
+      "export function choose(value: boolean) {\n  if (value) {\n    return 1;\n  }\n  return 0;\n}\n";
+    writeFileSync(fixture, source);
+    const incomplete = run();
+    assert.equal(incomplete.status, 1, incomplete.stdout + incomplete.stderr);
+    assert.match(
+      incomplete.stdout + incomplete.stderr,
+      /branch coverage.*(?:does not meet|below).*threshold/i,
+    );
+    writeFileSync(
+      driver,
+      'import { choose } from "./fixture.ts";\nchoose(true);\nchoose(false);\n',
+    );
+    assert.equal(run().status, 0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
