@@ -1,4 +1,8 @@
 const reviewedPaths = new Set([
+  "harness/tests/image/candidate-source.test.mjs",
+  "harness/tests/image/layer-scanning.test.mjs",
+  "harness/tests/image/workflow-runtime.test.mjs",
+  "harness/tests/image/publication.test.mjs",
   "harness/tests/workflows/policy.test.mjs",
   "harness/tests/workflows/history-ownership.test.mjs",
   "harness/tests/workflows/platform.test.mjs",
