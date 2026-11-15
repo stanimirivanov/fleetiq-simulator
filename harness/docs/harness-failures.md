@@ -65,3 +65,12 @@ Run under the pinned Node version to delay each cold process without changing ap
 ```sh
 NODE_OPTIONS='--import=data:text/javascript,await%20new%20Promise(r=>setTimeout(r,550))' node --test --test-name-pattern='CLI sends only|CLI private identity boundary' tests/cli/identity-boundary.test.ts
 ```
+
+
+## HF-007: Abrupt crash workers left incomplete native coverage
+
+- **Symptom:** All 51 session tests passed, but native coverage parsing failed with an unexpected end of JSON input and the session inventory gate rejected the run.
+- **Root cause:** The real spool-crash worker advertised a kill boundary without first publishing completed coverage. A diagnostic reproduction identified a zero-byte V8 profile belonging to the deliberately killed worker.
+- **Corrective control:** Flush native coverage with `takeCoverage()` and stop further collection immediately before publishing the crash marker. Preserve real `SIGSTOP`/`SIGKILL`, all storage recovery assertions, source inventories and thresholds. No malformed-file filtering or retries.
+- **Evidence:** [PR #90](https://github.com/stanimirivanov/fleetiq-simulator/pull/90), the complete-profile-before-kill regression in [coverage.test.mjs](../tests/verification/coverage.test.mjs). It checks all ten action/publication boundaries, executed spool source coverage, real SIGKILL termination and valid profiles after termination.
+- **Status:** Local correction under review; hosted CI confirmation pending. Reproduce with `node --test harness/tests/verification/coverage.test.mjs` and `node harness/src/verification/coverage.mjs session`.
