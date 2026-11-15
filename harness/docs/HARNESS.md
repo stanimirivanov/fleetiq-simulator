@@ -475,3 +475,37 @@ The floor protects both package manifests after this baseline is merged.
 PR CI selects the relocated checker from the exact event base when present,
 otherwise the legacy base checker. Candidate checker changes cannot replace
 either trusted version. The original one-time bootstrap SHA remains exact.
+
+## M8 command transition prerequisite
+
+The trusted floor permits five exact root-script transitions before M8 moves
+verification-only dependencies out of the product manifest. The authoritative
+strings live in `harnessTransitions` in
+[`floor.mjs`](../src/verification/floor.mjs); candidates cannot supply a mapping.
+
+| Root script | Reviewed replacement |
+| --- | --- |
+| `lint` | `pnpm --dir harness run lint:product` |
+| `lint:comments` | `pnpm --dir harness run lint:comments` |
+| `lint:packaging` | `pnpm --dir harness run lint:packaging` |
+| `lint:source-comments` | `pnpm --dir harness run lint:source-comments` |
+| `typecheck` | `tsc -p tsconfig.typecheck.json && pnpm --dir harness run typecheck` |
+
+Each transition requires the exact old command, root script name and new command,
+a private `harness/package.json`, its exact reviewed target script, and regular
+configuration files without linked parents. Lint delegates return to the repository
+root, invoke harness-owned tools, select harness-owned configuration explicitly,
+and preserve the comment/packaging stages. Typechecking retains the product
+command and adds the harness's existing `tsc -p config/tsconfig.json` gate.
+The comment-lint target also covers shared harness support.
+
+This prerequisite activates none of those commands and changes no dependency or
+configuration. M8 must install the matching scripts/configuration, prove product
+build and tests with a product-only dependency tree, remove compatibility bridges,
+and run canonical plus image/platform qualification. Matching these strings does
+not establish the semantic quality of configuration contents or replace those gates.
+Existing arbitrary-delegation and missing-tool failures remain errors.
+
+`node --test harness/tests/floor/command-transitions.test.mjs` exercises the
+reviewed bindings and rejects altered commands, candidate maps, missing targets,
+non-private packages and linked configuration/package paths using real Git fixtures.

@@ -169,6 +169,101 @@ function relocatedCommand(before, after, root) {
   return changed && present && after === expected;
 }
 
+/** @typedef {{before: string, after: string, target: string, script: string, files: string[]}} HarnessTransition */
+
+// M8's reviewed command contract. Candidate metadata cannot define transitions.
+/** @type {Map<string, HarnessTransition>} */
+const harnessTransitions = new Map([
+  [
+    "lint",
+    {
+      before:
+        "biome ci . --error-on-warnings && pnpm lint:comments && pnpm lint:source-comments",
+      after: "pnpm --dir harness run lint:product",
+      target: "lint:product",
+      script:
+        "cd .. && harness/node_modules/.bin/biome ci . --config-path=harness/config/biome.json --error-on-warnings && pnpm lint:comments && pnpm lint:source-comments",
+      files: ["harness/config/biome.json"],
+    },
+  ],
+  [
+    "lint:comments",
+    {
+      before: "eslint harness/src && pnpm lint:packaging",
+      after: "pnpm --dir harness run lint:comments",
+      target: "lint:comments",
+      script:
+        "cd .. && harness/node_modules/.bin/eslint --config harness/config/eslint.config.mjs harness/src harness/support && pnpm lint:packaging",
+      files: ["harness/config/eslint.config.mjs"],
+    },
+  ],
+  [
+    "lint:packaging",
+    {
+      before: "eslint packaging",
+      after: "pnpm --dir harness run lint:packaging",
+      target: "lint:packaging",
+      script:
+        "cd .. && harness/node_modules/.bin/eslint --config harness/config/eslint.config.mjs packaging",
+      files: ["harness/config/eslint.config.mjs"],
+    },
+  ],
+  [
+    "lint:source-comments",
+    {
+      before: "eslint src",
+      after: "pnpm --dir harness run lint:source-comments",
+      target: "lint:source-comments",
+      script:
+        "cd .. && harness/node_modules/.bin/eslint --config harness/config/eslint.config.mjs src",
+      files: ["harness/config/eslint.config.mjs"],
+    },
+  ],
+  [
+    "typecheck",
+    {
+      before: "tsc -p tsconfig.typecheck.json",
+      after:
+        "tsc -p tsconfig.typecheck.json && pnpm --dir harness run typecheck",
+      target: "typecheck",
+      script: "tsc -p config/tsconfig.json",
+      files: ["tsconfig.typecheck.json", "harness/config/tsconfig.json"],
+    },
+  ],
+]);
+
+/**
+ * Admits only reviewed root command changes bound to exact private-package gates.
+ * The target package and each configuration path must be regular, including parents;
+ * no arbitrary delegation, candidate mapping or altered shell chain is trusted.
+ * @param {string} file @param {string} name @param {unknown} before
+ * @param {unknown} after @param {string} root
+ */
+function harnessCommand(file, name, before, after, root) {
+  const transition = harnessTransitions.get(name);
+  if (
+    file !== "package.json" ||
+    !transition ||
+    before !== transition.before ||
+    after !== transition.after ||
+    !regularDestination(root, "harness/package.json") ||
+    !transition.files.every((path) => regularDestination(root, path))
+  )
+    return false;
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(root, "harness/package.json"), "utf8"),
+    );
+    return (
+      manifest.private === true &&
+      Object.hasOwn(manifest.scripts ?? {}, transition.target) &&
+      manifest.scripts[transition.target] === transition.script
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Selects the policy actually invoked, refusing ambiguous or unrecognized bindings.
  * Legacy fixtures without a coverage script must contain exactly one known policy.
@@ -534,6 +629,7 @@ export function checkFloor(base, root = ".") {
           newScripts[name] !== command &&
           !additiveCommand(command, newScripts[name], newScripts) &&
           !relocatedCommand(command, newScripts[name], root) &&
+          !harnessCommand(file, name, command, newScripts[name], root) &&
           !(
             name === "check" &&
             newScripts[name] === `pnpm floor && ${command}` &&
