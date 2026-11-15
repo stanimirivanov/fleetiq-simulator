@@ -16,22 +16,23 @@ test("floor rejects removed gates and reduced coverage but permits adding itself
       scripts: {
         check: "pnpm floor && pnpm test",
         test: "node --test",
-        floor: "node tools/floor.mjs",
+        floor: "node harness/src/verification/floor.mjs",
       },
     }),
   );
+  write("harness/src/verification/floor.mjs", "export const gate = true;");
   assert.deepEqual(checkFloor(base, root), []);
   write(
-    "tools/coverage.mjs",
+    "harness/src/verification/coverage.mjs",
     'export const groups = [{ name: "wire", lines: 89, branches: 85 }];',
   );
   assert.ok(checkFloor(base, root).includes("coverage-floor-lowered"));
   write(
-    "tools/coverage.mjs",
+    "harness/src/verification/coverage.mjs",
     'const decoy = { name: "wire", lines: 90, branches: 85 }; export const groups = dynamic;',
   );
   assert.ok(checkFloor(base, root).includes("coverage-floor-lowered"));
-  write("tools/coverage.mjs", "export const groups = [];");
+  write("harness/src/verification/coverage.mjs", "export const groups = [];");
   assert.ok(checkFloor(base, root).includes("coverage-floor-lowered"));
 });
 

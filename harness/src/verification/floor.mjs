@@ -88,36 +88,15 @@ function removedTests(before, after) {
   );
 }
 
-// M1 relocation contract, owned by the trusted checker, never candidate metadata.
-// Retire these legacy aliases in modularization M8 after all callers migrate.
-const relocations = new Map([
-  ["tools/floor.mjs", "harness/src/verification/floor.mjs"],
-  ["tools/coverage.mjs", "harness/src/verification/coverage.mjs"],
-  ["tools/architecture.mjs", "harness/src/architecture/architecture.mjs"],
-  ["tools/secrets.mjs", "harness/src/security/secrets.mjs"],
-  [
-    "tools/fleet-bounds.mjs",
-    "harness/src/qualification/fleet/fleet-bounds.mjs",
-  ],
-  [
-    "tools/platform-decoder.mjs",
-    "harness/src/qualification/platform/platform-decoder.mjs",
-  ],
-  [
-    "tools/image-qualify.mjs",
-    "harness/src/qualification/image/image-qualify.mjs",
-  ],
-  ["tests/codec8-oracle.test.ts", "tests/wire/codec8-oracle.test.ts"],
-  ["tests/udp.test.ts", "tests/wire/udp.test.ts"],
-  ["tests/codec16.test.ts", "tests/wire/codec16.test.ts"],
-  ["tests/codec12.test.ts", "tests/wire/codec12.test.ts"],
-  ["tools", "harness/src"],
-  ["tests/*.test.ts", '"tests/**/*.test.ts"'],
-  ["tests/*.test.mjs", '"tests/**/*.test.mjs"'],
-]);
-const coveragePaths = [
-  "tools/coverage.mjs",
+const coveragePaths = ["harness/src/verification/coverage.mjs"];
+const directGates = [
+  "harness/src/verification/floor.mjs",
   "harness/src/verification/coverage.mjs",
+  "harness/src/architecture/architecture.mjs",
+  "harness/src/security/secrets.mjs",
+  "harness/src/qualification/fleet/fleet-bounds.mjs",
+  "harness/src/qualification/platform/platform-decoder.mjs",
+  "harness/src/qualification/image/image-qualify.mjs",
 ];
 
 /**
@@ -139,34 +118,6 @@ function regularDestination(root, path, directory = false) {
   } catch {
     return false;
   }
-}
-
-/**
- * Accepts only exact token replacements from the reviewed migration contract.
- * Shell operators/flags cannot change; all mapped destinations must exist. This
- * deliberately grants no generic private-package delegation or candidate exception.
- * @param {unknown} before @param {unknown} after @param {string} root
- */
-function relocatedCommand(before, after, root) {
-  if (typeof before !== "string" || typeof after !== "string") return false;
-  let changed = false;
-  let present = true;
-  const expected = before
-    .split(" ")
-    .map((token) => {
-      const destination = relocations.get(token);
-      if (!destination) return token;
-      changed = true;
-      const glob = token.startsWith("tests/*");
-      present &&= regularDestination(
-        root,
-        glob ? "tests" : destination,
-        glob || token === "tools",
-      );
-      return destination;
-    })
-    .join(" ");
-  return changed && present && after === expected;
 }
 
 /** @typedef {{before: string, after: string, target: string, script: string, files: string[]}} HarnessTransition */
@@ -266,7 +217,7 @@ function harnessCommand(file, name, before, after, root) {
 
 /**
  * Selects the policy actually invoked, refusing ambiguous or unrecognized bindings.
- * Legacy fixtures without a coverage script must contain exactly one known policy.
+ * Fixtures without a coverage script must contain the canonical policy.
  * @param {Record<string, unknown>} scripts @param {(path: string) => boolean} exists
  */
 function coveragePath(scripts, exists) {
@@ -286,7 +237,7 @@ function coveragePath(scripts, exists) {
 }
 
 /**
- * Compares active policies across either layout, even if the legacy file remains.
+ * Compares canonical active policies, ignoring any obsolete shadow file.
  * Missing groups, unreadable files and deleted destinations fail closed. Baseline
  * thresholds come from Git, never a candidate-supplied manifest or stale shadow.
  * @param {string} root @param {string} base @param {Set<string>} baseFiles
@@ -628,12 +579,11 @@ export function checkFloor(base, root = ".") {
         if (
           newScripts[name] !== command &&
           !additiveCommand(command, newScripts[name], newScripts) &&
-          !relocatedCommand(command, newScripts[name], root) &&
           !harnessCommand(file, name, command, newScripts[name], root) &&
           !(
             name === "check" &&
             newScripts[name] === `pnpm floor && ${command}` &&
-            newScripts.floor === "node tools/floor.mjs"
+            newScripts.floor === "node harness/src/verification/floor.mjs"
           )
         )
           problems.add("verification-script-changed");
@@ -647,6 +597,17 @@ export function checkFloor(base, root = ".") {
       problems.add("test-disabled-or-focused");
     previousTests.push(...old.tests);
     currentTests.push(...next.tests);
+  }
+  const scripts =
+    JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts ?? {};
+  for (const command of Object.values(scripts)) {
+    const gate = directGates.find(
+      (path) =>
+        typeof command === "string" &&
+        command.split(" && ")[0] === `node ${path}`,
+    );
+    if (gate && !regularDestination(root, gate))
+      problems.add("verification-script-changed");
   }
   if (!coverageRetained(root, base, baseFiles))
     problems.add("coverage-floor-lowered");

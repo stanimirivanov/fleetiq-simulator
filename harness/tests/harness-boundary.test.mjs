@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -24,7 +26,14 @@ test("private harness pins its own tools and retains root compatibility until M8
   assert.equal(harness.type, "module");
   assert.deepEqual(harness.engines, product.engines);
   assert.equal(harness.packageManager, product.packageManager);
-  assert.deepEqual(harness.devDependencies, product.devDependencies);
+  assert.deepEqual(Object.keys(product.devDependencies).sort(), [
+    "@types/node",
+    "typescript",
+  ]);
+  for (const [name, version] of Object.entries(product.devDependencies))
+    assert.equal(harness.devDependencies[name], version);
+  for (const name of ["biome.json", "eslint.config.mjs", "tools"])
+    assert.equal(existsSync(join(root, name)), false, name);
   assert.equal(
     harness.scripts.test,
     'cd .. && node --test "harness/tests/**/*.test.mjs"',
@@ -67,28 +76,118 @@ test("product import boundary permits local modules and refuses harness, legacy 
 test("product builds and validates without harness files or verification configuration", () => {
   const directory = mkdtempSync(join(tmpdir(), "sim-product-only-"));
   try {
-    for (const name of ["src", "packaging"])
+    for (const name of ["src", "packaging", "tests", "profiles", "contracts"])
       cpSync(join(root, name), join(directory, name), { recursive: true });
-    for (const name of ["package.json", "tsconfig.json"])
+    for (const name of [
+      "package.json",
+      "pnpm-lock.yaml",
+      "tsconfig.json",
+      "tsconfig.typecheck.json",
+      "README.md",
+      "Dockerfile",
+      ".dockerignore",
+      "LICENSE",
+    ])
       cpSync(join(root, name), join(directory, name));
-    symlinkSync(
-      join(root, "node_modules"),
-      join(directory, "node_modules"),
-      "dir",
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    delete env.NODE_V8_COVERAGE;
+    delete env.NODE_PATH;
+    env.PATH = env.PATH?.split(":")
+      .filter((part) => !part.startsWith(root))
+      .join(":");
+    const store = spawnSync("pnpm", ["store", "path"], {
+      cwd: root,
+      encoding: "utf8",
+      env,
+      timeout: 10000,
+    });
+    assert.equal(store.status, 0, store.stderr);
+    const install = spawnSync(
+      "pnpm",
+      [
+        "install",
+        "--offline",
+        "--frozen-lockfile",
+        "--ignore-scripts",
+        "--store-dir",
+        store.stdout.trim(),
+      ],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        env,
+        timeout: 30000,
+      },
     );
+    assert.equal(install.status, 0, install.stdout + install.stderr);
+    for (const name of ["ajv", "effect", "typescript", "@types/node"])
+      assert.ok(
+        realpathSync(join(directory, "node_modules", name)).startsWith(
+          `${directory}/`,
+        ),
+        name,
+      );
+    for (const name of ["eslint", "yaml", "@biomejs/biome"])
+      assert.equal(
+        existsSync(join(directory, "node_modules", name)),
+        false,
+        name,
+      );
+    assert.equal(existsSync(join(directory, "harness")), false);
     const build = spawnSync(
       process.execPath,
       [
-        join(root, "node_modules/typescript/bin/tsc"),
+        join(directory, "node_modules/typescript/bin/tsc"),
         "--rootDir",
         "src",
         "--outDir",
         "dist",
         "--rewriteRelativeImportExtensions",
       ],
-      { cwd: directory, encoding: "utf8", timeout: 30000 },
+      { cwd: directory, encoding: "utf8", env, timeout: 30000 },
     );
     assert.equal(build.status, 0, build.stdout + build.stderr);
+    const types = spawnSync(
+      process.execPath,
+      ["node_modules/typescript/bin/tsc", "-p", "tsconfig.typecheck.json"],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        env,
+        timeout: 30000,
+      },
+    );
+    assert.equal(types.status, 0, types.stdout + types.stderr);
+    const tests = spawnSync(
+      process.execPath,
+      [
+        "--test",
+        "--test-concurrency=1",
+        "tests/**/*.test.ts",
+        "tests/**/*.test.mjs",
+      ],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        env,
+        timeout: 120000,
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
+    assert.equal(tests.status, 0, tests.stdout + tests.stderr);
+    const gate = spawnSync("pnpm", ["floor"], {
+      cwd: directory,
+      encoding: "utf8",
+      env,
+      timeout: 10000,
+    });
+    assert.notEqual(gate.status, 0);
+    assert.match(
+      gate.stderr + gate.stdout,
+      /MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND/,
+    );
+
     const input = join(directory, "record.json");
     writeFileSync(
       input,

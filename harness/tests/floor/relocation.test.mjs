@@ -41,9 +41,9 @@ function fixture(context) {
   };
   const scripts = {
     check: "pnpm test:coverage",
-    "test:coverage": `node ${oldCoverage} && pnpm test:bounds`,
-    "test:bounds": "node tools/fleet-bounds.mjs",
-    test: "node --test tests/*.test.ts tests/*.test.mjs",
+    "test:coverage": `node ${newCoverage} && pnpm test:bounds`,
+    "test:bounds": "node harness/src/qualification/fleet/fleet-bounds.mjs",
+    test: 'node --test "tests/**/*.test.ts" "tests/**/*.test.mjs"',
   };
   const manifest = (/** @type {Record<string,string>} */ overrides = {}) =>
     write(
@@ -66,6 +66,11 @@ function fixture(context) {
   git(["init", "--initial-branch=main"]);
   manifest();
   write(oldCoverage, policy);
+  write(newCoverage, policy);
+  write(
+    "harness/src/qualification/fleet/fleet-bounds.mjs",
+    "export const gate = true;",
+  );
   write(
     "tests/original.test.mjs",
     declaration + declaration.replaceAll("retained", "second"),
@@ -158,17 +163,25 @@ test("floor accepts each reviewed direct gate binding without permitting operato
     ],
   ];
   manifest(
-    Object.fromEntries(pairs.map(([name, old]) => [name, `node ${old}`])),
+    Object.fromEntries(
+      pairs.map(([name, _old, next]) => [name, `node ${next}`]),
+    ),
   );
+  for (const [_name, _old, next] of pairs) {
+    if (!next) throw new Error("invalid-fixture");
+    write(next, "export const fixture = true;");
+  }
   const base = commit();
-  for (const [name, _old, next] of pairs) {
+  for (const [name, old, next] of pairs) {
     if (!name || !next) throw new Error("invalid-fixture");
     write(next, "export const fixture = true;");
     const overrides = Object.fromEntries(
-      pairs.map(([key, old]) => [key, `node ${old}`]),
+      pairs.map(([key, _old, next]) => [key, `node ${next}`]),
     );
     manifest({ ...overrides, [name]: `node ${next}` });
     assert.deepEqual(checkFloor(base, root), []);
+    manifest({ ...overrides, [name]: `node ${old}` });
+    assert.ok(checkFloor(base, root).includes("verification-script-changed"));
     manifest({ ...overrides, [name]: `node ${next} || true` });
     assert.ok(checkFloor(base, root).includes("verification-script-changed"));
   }
@@ -178,6 +191,7 @@ test("floor rejects missing and symlinked gate destinations", (context) => {
   const { root, base, write, manifest } = fixture(context);
   const target = "harness/src/qualification/fleet/fleet-bounds.mjs";
   manifest({ "test:bounds": `node ${target}` });
+  rmSync(join(root, target));
   assert.ok(checkFloor(base, root).includes("verification-script-changed"));
   write("harness/target.mjs", "export const probe = true;");
   mkdirSync(dirname(join(root, target)), { recursive: true });

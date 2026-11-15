@@ -3,7 +3,9 @@ import { test } from "node:test";
 import { ESLint } from "eslint";
 
 test("tooling comment lint rejects adjacent comments and missing summaries", async () => {
-  const eslint = new ESLint();
+  const eslint = new ESLint({
+    overrideConfigFile: "harness/config/eslint.config.mjs",
+  });
   const [result] = await eslint.lintText(
     `const value = 1;
 // This comment is adjacent.
@@ -17,7 +19,7 @@ function undocumented() {
   const third = second * 2;
   return third;
 }`,
-    { filePath: "tools/comment-fixture.mjs" },
+    { filePath: "harness/src/comment-fixture.mjs" },
   );
   assert.ok(result);
   assert.deepEqual(
@@ -32,7 +34,9 @@ function undocumented() {
 });
 
 test("tooling comment lint permits separated prose and short helpers", async () => {
-  const eslint = new ESLint();
+  const eslint = new ESLint({
+    overrideConfigFile: "harness/config/eslint.config.mjs",
+  });
   const [result] = await eslint.lintText(
     `const base = 1;
 
@@ -50,14 +54,16 @@ function accumulate(count) {
   }
   return result;
 }`,
-    { filePath: "tools/comment-fixture.mjs" },
+    { filePath: "harness/src/comment-fixture.mjs" },
   );
   assert.ok(result);
   assert.deepEqual(result.messages, []);
 });
 
 test("source comment lint requires docs on TypeScript contracts and named helpers", async () => {
-  const eslint = new ESLint();
+  const eslint = new ESLint({
+    overrideConfigFile: "harness/config/eslint.config.mjs",
+  });
   for (const source of [
     "export type Record = { timestampMs: string };",
     "interface InternalContract { bytes: Uint8Array }",
@@ -84,7 +90,9 @@ test("source comment lint requires docs on TypeScript contracts and named helper
 });
 
 test("source comment lint rejects tag-only docs and adjacent comments", async () => {
-  const eslint = new ESLint();
+  const eslint = new ESLint({
+    overrideConfigFile: "harness/config/eslint.config.mjs",
+  });
   for (const source of [
     "/** @param value */\nexport function encode(value: unknown) { return value; }",
     "/** @typedef Record */\nexport type Record = { timestampMs: string };",
@@ -111,7 +119,9 @@ test("source comment lint rejects tag-only docs and adjacent comments", async ()
 });
 
 test("source comment lint accepts contracts, private fields and concise local helpers", async () => {
-  const eslint = new ESLint();
+  const eslint = new ESLint({
+    overrideConfigFile: "harness/config/eslint.config.mjs",
+  });
   const [result] = await eslint.lintText(
     `
 /** Closed schema for timestamp admission before any allocation. */
@@ -147,7 +157,9 @@ function validate(value: unknown) {
 });
 
 test("product packaging retains tooling comment-quality enforcement", async () => {
-  const eslint = new ESLint();
+  const eslint = new ESLint({
+    overrideConfigFile: "harness/config/eslint.config.mjs",
+  });
   const [invalid] = await eslint.lintText(
     "const value = 1;\n// Adjacent comment.\n/** @param {number} input */\nfunction prepare(input) { return input; }",
     { filePath: "packaging/comment-fixture.mjs" },

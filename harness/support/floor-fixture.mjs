@@ -39,7 +39,7 @@ export function fixture(context) {
     JSON.stringify({ scripts: { check: "pnpm test", test: "node --test" } }),
   );
   write(
-    "tools/coverage.mjs",
+    "harness/src/verification/coverage.mjs",
     'export const groups = [{ name: "wire", lines: 90, branches: 85 }];',
   );
   git(["add", "."]);

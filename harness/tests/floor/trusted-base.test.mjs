@@ -28,13 +28,13 @@ test("PR shell uses the trusted base checker despite candidate tampering and rej
   }
   assert.equal(run(base).status, 1);
   write(
-    "tools/floor.mjs",
+    "harness/src/verification/floor.mjs",
     readFileSync(
       new URL("../../src/verification/floor.mjs", import.meta.url),
       "utf8",
     ),
   );
-  git(["add", "tools/floor.mjs"]);
+  git(["add", "harness/src/verification/floor.mjs", "tools/floor.mjs"]);
   git([
     "-c",
     "user.name=Fixture",
@@ -52,6 +52,10 @@ test("PR shell uses the trusted base checker despite candidate tampering and rej
   );
   write("tools/floor.mjs", 'console.log("candidate-bypassed");');
   write(
+    "harness/src/verification/floor.mjs",
+    'console.log("candidate-bypassed");',
+  );
+  write(
     "src/new.ts",
     "// @ts-ignore confidential-fixture\nexport const value = 1;",
   );
@@ -60,10 +64,11 @@ test("PR shell uses the trusted base checker despite candidate tampering and rej
   assert.match(result.stderr, /suppression-added/);
   assert.doesNotMatch(
     result.stdout + result.stderr,
-    /candidate-bypassed|confidential-fixture/,
+    /candidate-bypassed|legacy-bypassed|confidential-fixture/,
   );
 
-  // The relocated base must win even when its legacy checker is a no-op.
+  // The canonical base must ignore a changed legacy decoy across later baselines.
+  write("tools/floor.mjs", 'console.log("legacy-bypassed");');
   write(
     "harness/src/verification/floor.mjs",
     readFileSync(
@@ -91,6 +96,6 @@ test("PR shell uses the trusted base checker despite candidate tampering and rej
   assert.match(relocated.stderr, /suppression-added/);
   assert.doesNotMatch(
     relocated.stdout + relocated.stderr,
-    /candidate-bypassed|confidential-fixture/,
+    /candidate-bypassed|legacy-bypassed|confidential-fixture/,
   );
 });

@@ -5,7 +5,6 @@ import jsdoc from "eslint-plugin-jsdoc";
 export default [
   {
     files: [
-      "tools/**/*.mjs",
       "harness/src/**/*.mjs",
       "harness/support/**/*.mjs",
       "packaging/**/*.mjs",

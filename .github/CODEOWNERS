@@ -1,18 +1,11 @@
 # Maintainer responsibility and review routing; no independent-approval prerequisite.
 /.github/ @stanimirivanov
 /.githooks/ @stanimirivanov
-/tools/ @stanimirivanov
 /harness/ @stanimirivanov
 /packaging/ @stanimirivanov
 /tests/ @stanimirivanov
 /**/AGENTS.md @stanimirivanov
-/CONSTRAINTS.md @stanimirivanov
-/HARNESS.md @stanimirivanov
-/docs/harness-failures.md @stanimirivanov
 /package.json @stanimirivanov
 /pnpm-lock.yaml @stanimirivanov
 /tsconfig*.json @stanimirivanov
-/biome.json @stanimirivanov
-/eslint.config.mjs @stanimirivanov
-/.gitleaks.toml @stanimirivanov
 /.gitignore @stanimirivanov
