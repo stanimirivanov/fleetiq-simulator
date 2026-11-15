@@ -9,8 +9,8 @@ import {
   publishedReference,
   validatePublicationReceipt,
   validatePublicationSource,
-} from "../src/publication/image-publish.mjs";
-import { publicationFixture } from "../support/image-publish-fixture.mjs";
+} from "../../src/publication/image-publish.mjs";
+import { publicationFixture } from "../../support/image-publish-fixture.mjs";
 
 const revision = "a".repeat(40);
 const repository = "stanimirivanov/fleetiq-simulator";
@@ -116,7 +116,7 @@ test("registry readback must match qualified content, labels and immutable repos
 test("publisher is manual on main, read-only until qualification and uses v7 actions", () => {
   const workflow = parse(
     readFileSync(
-      new URL("../../.github/workflows/publish.yml", import.meta.url),
+      new URL("../../../.github/workflows/publish.yml", import.meta.url),
       "utf8",
     ),
   );
@@ -158,7 +158,7 @@ test("native publication projects only immutable evidence and removes temporary 
   const fixture = publicationFixture();
   try {
     const script = fileURLToPath(
-      new URL("../src/publication/image-publish.mjs", import.meta.url),
+      new URL("../../src/publication/image-publish.mjs", import.meta.url),
     );
     const success = spawnSync(process.execPath, [script, "publish"], {
       cwd: fixture.root,
