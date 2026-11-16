@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assertBounds } from "../src/qualification/fleet/fleet-bounds.mjs";
+import { assertBounds } from "../../src/qualification/fleet/fleet-bounds.mjs";
 
 const report = {
   profile: "product",

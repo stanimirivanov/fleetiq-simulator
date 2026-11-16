@@ -8,7 +8,7 @@ import {
   platformCases,
   runCommand,
   verifyCheckout,
-} from "../src/qualification/platform/platform-decoder.mjs";
+} from "../../src/qualification/platform/platform-decoder.mjs";
 
 test("platform comparison requires every case, field and raw byte without numeric coercion", () => {
   const cases = platformCases();
