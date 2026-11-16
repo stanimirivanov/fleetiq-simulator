@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -152,5 +155,93 @@ test("coverage thresholds reject an uncovered branch", () => {
     assert.equal(run().status, 0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("crash workers publish complete native coverage before advertising every kill boundary", {
+  timeout: 20000,
+}, async () => {
+  const { FileStore } = await import("../../../src/storage/spool.ts");
+  const { DurableSpool } = await import("../../../src/session/spool.ts");
+  const { binding, limits, work } = await import(
+    "../../../tests/support/playback/spool-fixture.ts"
+  );
+  const { setTimeout: delay } = await import("node:timers/promises");
+  for (const action of ["advance", "prepare", "ack", "hold"]) {
+    for (const stage of action === "hold"
+      ? ["hold"]
+      : ["before-rename", "after-rename", "after-sync"]) {
+      const directory = mkdtempSync(join(tmpdir(), "fleetiq-crash-coverage-"));
+      const state = join(directory, "state");
+      const coverage = join(directory, "coverage");
+      mkdirSync(state, { mode: 0o700 });
+      mkdirSync(coverage);
+      const store = new FileStore(state);
+      try {
+        const spool = new DurableSpool(store, binding, work, limits, false);
+        if (action !== "advance") spool.advance();
+        if (action === "ack") spool.prepare();
+      } finally {
+        store.close();
+      }
+      const marker = join(directory, "ready");
+      const env = { ...process.env };
+      env.NODE_V8_COVERAGE = coverage;
+      delete env.NODE_TEST_CONTEXT;
+      const child = spawn(
+        process.execPath,
+        [
+          "tests/support/processes/spool-crash.ts",
+          state,
+          action,
+          stage,
+          marker,
+        ],
+        { env, stdio: "ignore" },
+      );
+      const closed = once(child, "close");
+      try {
+        const until = Date.now() + 3000;
+        while (!existsSync(marker) && Date.now() < until) await delay(10);
+        assert.ok(
+          existsSync(marker),
+          `worker did not reach ${action}/${stage}`,
+        );
+        const profiles = readdirSync(coverage).filter(
+          (file) =>
+            file.startsWith(`coverage-${child.pid}-`) && file.endsWith(".json"),
+        );
+        assert.ok(
+          profiles.length > 0,
+          `coverage missing at ${action}/${stage}`,
+        );
+
+        /** @type {{url: string, functions: {ranges: {count: number}[]}[]}[]} */
+        const scripts = profiles.flatMap(
+          (file) =>
+            JSON.parse(readFileSync(join(coverage, file), "utf8")).result,
+        );
+        assert.ok(
+          scripts.some(
+            (script) =>
+              script.url.endsWith("/src/session/spool.ts") &&
+              script.functions.some((fn) =>
+                fn.ranges.some((range) => range.count > 0),
+              ),
+          ),
+        );
+      } finally {
+        child.kill("SIGKILL");
+        const [code, signal] = await closed;
+        try {
+          assert.equal(code, null);
+          assert.equal(signal, "SIGKILL");
+          for (const file of readdirSync(coverage))
+            JSON.parse(readFileSync(join(coverage, file), "utf8"));
+        } finally {
+          rmSync(directory, { recursive: true, force: true });
+        }
+      }
+    }
   }
 });

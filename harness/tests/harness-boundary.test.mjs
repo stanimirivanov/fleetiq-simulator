@@ -73,6 +73,93 @@ test("product import boundary permits local modules and refuses harness, legacy 
   );
 });
 
+test("product dependency syntax rejects filesystem loads and module factories in every owner", async () => {
+  const { checkProductImports } = await import(
+    "../src/architecture/boundary.mjs"
+  );
+  const specifiers = [
+    "/private/harness/gate.mjs",
+    "file:///private/harness/gate.mjs",
+    "file:/private/gate.mjs",
+    "FILE:///private/gate.mjs",
+    "../../outside/gate.mjs",
+    "../../",
+    "../../outside/../gate.mjs",
+    "node:module",
+    "module",
+  ];
+  for (const file of [
+    "src/probe.ts",
+    "tests/probe.test.mjs",
+    "packaging/probe.mjs",
+  ]) {
+    for (const specifier of specifiers) {
+      const literal = JSON.stringify(specifier);
+      for (const source of [
+        `import * as dependency from ${literal};`,
+        `import ${literal};`,
+        `export * from ${literal};`,
+        `type Dependency = import(${literal}).Dependency;`,
+        `const dependency = import(${literal});`,
+        `const dependency = require(${literal});`,
+      ]) {
+        assert.deepEqual(
+          checkProductImports({ [file]: source }),
+          ["product-harness-import"],
+          `${file}: ${source}`,
+        );
+      }
+    }
+  }
+});
+
+test("product dependency syntax preserves local, package and builtin loads and fixture text", async () => {
+  const { checkProductImports } = await import(
+    "../src/architecture/boundary.mjs"
+  );
+  for (const specifier of [
+    "./local.ts",
+    "../src/wire/codec8.ts",
+    "./nested/../local.mjs",
+    "ajv",
+    "effect/Effect",
+    "@scope/package",
+    "node:net",
+    "fs",
+    "./module.ts",
+  ]) {
+    const literal = JSON.stringify(specifier);
+    assert.deepEqual(
+      checkProductImports({
+        "tests/probe.ts": `
+        import * as dependency from ${literal};
+        export * from ${literal};
+        type Dependency = import(${literal}).Dependency;
+        const dynamic = import(${literal});
+        const common = require(${literal});
+      `,
+      }),
+      [],
+    );
+  }
+  for (const source of [
+    'import { createRequire as loadFactory } from "node:module"; const load = loadFactory(import.meta.url); load("./local.mjs");',
+    'import * as loader from "module"; const load = loader.createRequire(import.meta.url);',
+    'const loader = await import("node:module");',
+    'const loader = require("module");',
+  ]) {
+    assert.deepEqual(checkProductImports({ "src/probe.ts": source }), [
+      "product-harness-import",
+    ]);
+    assert.deepEqual(
+      checkProductImports({
+        "tests/fixture.ts": `const fixture = ${JSON.stringify(source)};`,
+      }),
+      [],
+    );
+  }
+});
+
 test("product builds and validates without harness files or verification configuration", () => {
   const directory = mkdtempSync(join(tmpdir(), "sim-product-only-"));
   try {

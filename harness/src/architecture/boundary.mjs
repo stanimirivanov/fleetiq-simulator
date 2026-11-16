@@ -5,7 +5,8 @@ import ts from "typescript";
 /**
  * Enforces the one-way harness boundary on actual import/export syntax, ignoring
  * fixture strings. Product code cannot load the harness, legacy tools or computed
- * modules; the harness may consume product APIs and independent test vectors.
+ * modules. Filesystem loads and module factories are closed to keep dependencies
+ * statically inspectable; this is not a runtime sandbox.
  * @param {Record<string,string>} files
  */
 export function checkProductImports(files) {
@@ -39,10 +40,18 @@ export function checkProductImports(files) {
           problems.add("product-harness-import");
       }
       if (specifier && ts.isStringLiteralLike(specifier)) {
-        const target = posix.normalize(
-          posix.join(dirname(file), specifier.text),
-        );
+        const value = specifier.text;
+        const target = posix.normalize(posix.join(dirname(file), value));
+        const relative = value.startsWith("./") || value.startsWith("../");
+
+        // Module factories can hide dependencies behind aliases; reject their
+        // entry points rather than approximating JavaScript data flow.
         if (
+          posix.isAbsolute(value) ||
+          /^file:/iu.test(value) ||
+          (relative && (target === ".." || target.startsWith("../"))) ||
+          value === "node:module" ||
+          value === "module" ||
           target === "harness" ||
           target.startsWith("harness/") ||
           target === "tools" ||
