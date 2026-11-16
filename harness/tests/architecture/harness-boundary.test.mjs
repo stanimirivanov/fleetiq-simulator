@@ -15,7 +15,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("../../", import.meta.url));
+const root = fileURLToPath(new URL("../../../", import.meta.url));
 
 test("private harness pins its own tools and retains root compatibility until M8", () => {
   const product = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -43,7 +43,7 @@ test("private harness pins its own tools and retains root compatibility until M8
 
 test("product import boundary permits local modules and refuses harness, legacy tooling and computed imports", async () => {
   const { checkProductImports } = await import(
-    "../src/architecture/boundary.mjs"
+    "../../src/architecture/boundary.mjs"
   );
   assert.deepEqual(
     checkProductImports({
@@ -75,7 +75,7 @@ test("product import boundary permits local modules and refuses harness, legacy 
 
 test("product dependency syntax rejects filesystem loads and module factories in every owner", async () => {
   const { checkProductImports } = await import(
-    "../src/architecture/boundary.mjs"
+    "../../src/architecture/boundary.mjs"
   );
   const specifiers = [
     "/private/harness/gate.mjs",
@@ -115,7 +115,7 @@ test("product dependency syntax rejects filesystem loads and module factories in
 
 test("product dependency syntax preserves local, package and builtin loads and fixture text", async () => {
   const { checkProductImports } = await import(
-    "../src/architecture/boundary.mjs"
+    "../../src/architecture/boundary.mjs"
   );
   for (const specifier of [
     "./local.ts",
@@ -305,7 +305,9 @@ test("product builds and validates without harness files or verification configu
 });
 
 test("unreadable or linked product trees fail closed without exposing paths", async () => {
-  const { checkProductTree } = await import("../src/architecture/boundary.mjs");
+  const { checkProductTree } = await import(
+    "../../src/architecture/boundary.mjs"
+  );
   const { mkdirSync } = await import("node:fs");
   const directory = mkdtempSync(join(tmpdir(), "sim-boundary-"));
   try {
