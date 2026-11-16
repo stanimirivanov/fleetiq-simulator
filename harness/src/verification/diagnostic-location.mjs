@@ -28,7 +28,7 @@ const reviewedPaths = new Set([
   "tests/storage/spool.test.ts",
   "tests/wire/codec8-oracle.test.ts",
   "harness/src/architecture/boundary.mjs",
-  "harness/tests/harness-boundary.test.mjs",
+  "harness/tests/architecture/harness-boundary.test.mjs",
   "harness/src/architecture/architecture.mjs",
   "harness/src/architecture/wire-ambient.mjs",
   "harness/src/verification/diagnostic-location.mjs",
@@ -44,7 +44,7 @@ const reviewedPaths = new Set([
   "harness/tests/verification/coverage.test.mjs",
   "harness/tests/fleet-bounds.test.mjs",
   "harness/tests/security/scanner.test.mjs",
-  "harness/tests/transport-load.test.mjs",
+  "harness/tests/architecture/transport-load.test.mjs",
   "harness/tests/verification/typecheck.test.mjs",
 
   "packaging/image-deps.mjs",

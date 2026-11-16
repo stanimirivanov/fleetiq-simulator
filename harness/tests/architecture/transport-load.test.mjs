@@ -13,9 +13,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("../../", import.meta.url));
+const root = fileURLToPath(new URL("../../../", import.meta.url));
 const hook = fileURLToPath(
-  new URL("../support/no-transport.mjs", import.meta.url),
+  new URL("../../support/no-transport.mjs", import.meta.url),
 );
 
 /**
