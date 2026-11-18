@@ -1,6 +1,6 @@
 # Durable single-device offline recovery
 
-SIM-PR11 adds `run` / `resume` for an accelerated playback config containing
+SIM-PR11 adds `run` / `resume` for a playback config containing
 `playback` instead of `record`. Existing single-record inputs remain compatible;
 `encode` still encodes one record. `validate` checks playback inputs and scheduling
 offline without creating state or loading TCP; it does not qualify an existing
@@ -36,6 +36,23 @@ sends for that invocation while remaining capture is retained. Cancellation and
 run-budget expiry stop capture. `timingProfile: "accelerated"` processes the
 bounded virtual schedule as fast as persistence/IO allows, yielding between ticks.
 It is not real-time hardware timing. ACK/run budgets remain real monotonic time.
+
+For opt-in paced execution, select `timingProfile: "real-time"`. Each virtual
+capture/send tick waits until its offset is due on the monotonic session clock;
+device epoch, offset and drift affect record timestamps only. Slow delivery may
+leave ticks overdue; those catch up without a second delay. No keepalive records
+are inserted. This is schedule pacing, not firmware or physical-clock fidelity.
+The configured real run budget must cover the intended schedule and network IO.
+Cancellation/deadline checks stay active during waiting. Each requested sleep is
+capped at 50 ms; actual response latency also depends on timer scheduling.
+
+Resume starts a fresh monotonic pacing origin at the retained virtual cursor.
+Downtime does not advance capture, queue age or device time, and the frozen pending
+batch drains under the existing ACK rules before remaining scheduled ticks.
+The timing selector is part of the config binding: changing it while resuming an
+existing checkpoint rejects with `spool-mismatch`. Accelerated behavior and
+existing configs remain unchanged. This addition does not retain a TCP connection
+between separate durable batches; that prerequisite remains a separate change.
 
 ## Checkpoint and recovery contract
 

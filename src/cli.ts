@@ -22,6 +22,7 @@ import {
 import { ProfileError } from "./scenarios/profile.ts";
 import { createPlayback, ScenarioError } from "./scenarios/route.ts";
 import { BatchQueue } from "./session/batches.ts";
+import { createPlaybackPacer } from "./session/pacing.ts";
 import { DurableSpool, SpoolError } from "./session/spool.ts";
 import {
   type ConnectionPolicy,
@@ -635,7 +636,7 @@ function fleetResources() {
   };
 }
 
-/** Accelerated playback inputs are sibling private files; queue state lives in a dedicated directory. */
+/** Durable playback inputs are sibling private files; timing is explicit and queue state has its own directory. */
 export type PlaybackRunConfig = Omit<RunConfig, "record"> & {
   playback: {
     routeFile: string;
@@ -646,7 +647,7 @@ export type PlaybackRunConfig = Omit<RunConfig, "record"> & {
     sendIntervalMs: number;
     on: ("ignition" | "movement" | "stop")[];
     offlineUntilMs: number;
-    timingProfile: "accelerated";
+    timingProfile: "accelerated" | "real-time";
     maxRecords: number;
     maxFrameBytes: number;
     maxQueuedRecords: number;
@@ -698,7 +699,7 @@ const validPlaybackConfig = new Ajv2020({
           items: { enum: ["ignition", "movement", "stop"] },
         },
         offlineUntilMs: integer,
-        timingProfile: { const: "accelerated" },
+        timingProfile: { enum: ["accelerated", "real-time"] },
         maxRecords: integer,
         maxFrameBytes: integer,
         maxQueuedRecords: integer,
@@ -879,6 +880,14 @@ async function runPlayback(
   const store = new FileStore(resolve(root, p.stateDirectory));
   try {
     const spool = new DurableSpool(store, binding, work, p, resume);
+    const pacer =
+      p.timingProfile === "real-time"
+        ? createPlaybackPacer(
+            spool.stats.atMs,
+            budget,
+            (ms) => new Promise<void>((done) => setTimeout(done, ms)),
+          )
+        : undefined;
     let last: SessionError | undefined;
     let blocked = false;
 
@@ -913,6 +922,9 @@ async function runPlayback(
       while (spool.stats.cursor < work.length) {
         if (signal.aborted) throw new SessionError("cancelled");
         budget.remaining();
+        const next = work[spool.stats.cursor];
+        if (!next) throw new SessionError("invalid-session");
+        if (pacer) await pacer.waitUntil(next.atMs);
         const send = spool.advance();
         if (send && spool.stats.atMs >= p.offlineUntilMs && !blocked)
           await drain();

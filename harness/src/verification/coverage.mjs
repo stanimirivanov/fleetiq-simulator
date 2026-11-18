@@ -56,6 +56,7 @@ export const groups = [
       "tests/transport/tcp-recovery.test.ts",
       "tests/transport/tcp-deadlines.test.ts",
       "tests/session/bounds.test.ts",
+      "tests/session/pacing.test.ts",
       "tests/transport/compose-dns.test.ts",
       "tests/session/command-state.test.ts",
       "tests/transport/command-exchange.test.ts",
@@ -67,6 +68,7 @@ export const groups = [
     ],
     sources: [
       "src/session/state.ts",
+      "src/session/pacing.ts",
       "src/session/command.ts",
       "src/transport/tcp.ts",
       "src/transport/fleet.ts",
