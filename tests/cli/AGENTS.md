@@ -12,3 +12,9 @@ deadlines; do not combine cold subprocess runs under one timeout.
 existing serial CLI coverage group. Keep that source denominator and threshold
 unchanged. Preserve real subprocess interruption and byte-exact resume checks;
 fixture modules live under `tests/support/` without a `.test` suffix.
+
+
+`persistent-playback.test.ts` owns cross-tick login reuse and frozen pending
+resume through the real CLI. Keep exact source timestamps, ACK-only removal and
+completed-resume no-resend assertions. Installed lifetime evidence stays in the
+deployment repository.

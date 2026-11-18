@@ -5,7 +5,7 @@ import {
   type LookupFunction,
   type Socket,
 } from "node:net";
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Scope } from "effect";
 import { planFaults } from "../scenarios/faults.ts";
 import { CommandFixture } from "../session/command.ts";
 import {
@@ -417,6 +417,130 @@ export async function sendBatches(
     throw Cause.squash(exit.cause);
   }
   return exit.value;
+}
+
+/** A serial batch port: the caller commits its durable ACK only after this promise resolves. */
+export type BatchSender = (
+  frame: Buffer | Codec8Frame,
+) => Promise<DeliveryReceipt>;
+
+/**
+ * Owns one lazy session across a caller's durable ticks. Strict mode still retires
+ * each ACKed socket; compliant-peer mode retains it until closure/failure/finally.
+ * All calls share one monotonic budget. The caller must await sends and honor its
+ * budget/cancellation while idle. Failure closes the Effect scope before retrying
+ * the frozen packet; remote acceptance may therefore occur more than once.
+ */
+export async function withBatchSender<A>(
+  options: SessionOptions,
+  use: (send: BatchSender) => Promise<A>,
+): Promise<A> {
+  const controller = new AbortController();
+  const settings = {
+    ...options,
+    signal: options.signal
+      ? AbortSignal.any([options.signal, controller.signal])
+      : controller.signal,
+  };
+  const limits = sessionLimits(settings);
+  const login = Buffer.alloc(17);
+  login.writeUInt16BE(15);
+  login.write(settings.identity, 2, "ascii");
+  let scope: Scope.Closeable | undefined;
+  let socket: Socket | undefined;
+  let pending: Promise<DeliveryReceipt> | undefined;
+  let closed = false;
+  let terminal: SessionError | undefined;
+
+  /** Closes without the aborted run signal so finalization always waits for socket release. */
+  async function retire(): Promise<void> {
+    const active = scope;
+    scope = undefined;
+    socket = undefined;
+    if (active) await Effect.runPromise(Scope.close(active, Exit.void));
+  }
+
+  /** Preserves expected session errors and unexpected defects across the Promise boundary. */
+  async function run<B>(task: Effect.Effect<B, SessionError>): Promise<B> {
+    const exit = await Effect.runPromiseExit(task, { signal: settings.signal });
+    if (Exit.isFailure(exit)) {
+      if (Cause.hasInterruptsOnly(exit.cause))
+        throw new SessionError("cancelled");
+      throw Cause.squash(exit.cause);
+    }
+    return exit.value;
+  }
+
+  /** Snapshots once per durable batch; every retry uses exactly those bytes and count. */
+  async function submit(frame: Buffer | Codec8Frame): Promise<DeliveryReceipt> {
+    let frozen: ReturnType<typeof Codec8Frame.snapshot>;
+    try {
+      frozen = Codec8Frame.snapshot(frame);
+    } catch (error) {
+      if (error instanceof FrameError)
+        throw new SessionError("invalid-session");
+      throw error;
+    }
+    for (let attempt = 1; ; attempt++) {
+      try {
+        if (closed) throw new SessionError("cancelled");
+        limits.remaining();
+        if (terminal) throw terminal;
+        if (socket?.destroyed || socket?.readableEnded) await retire();
+        if (!socket) {
+          const active = Effect.runSync(Scope.make());
+          scope = active;
+          socket = (await run(Scope.provide(openSocket(settings), active)))
+            .socket;
+          const accepted = await run(exchange(socket, login, 1, limits));
+          if (accepted[0] !== 1) throw new SessionError("login-refused");
+        }
+        const reply = await run(exchange(socket, frozen.bytes, 4, limits));
+        if (reply.readUInt32BE() !== frozen.recordCount)
+          throw new SessionError("ack-count");
+        if (limits.connectionPolicy === "single-batch") await retire();
+        return { status: "acknowledged", recordCount: frozen.recordCount };
+      } catch (error) {
+        await retire();
+        if (!(error instanceof SessionError)) throw error;
+        const fatal = [
+          "login-refused",
+          "run-timeout",
+          "cancelled",
+          "invalid-session",
+        ].includes(error.category);
+        if (closed || fatal || attempt >= limits.maxAttempts) {
+          if (
+            fatal ||
+            ["ack-count", "unexpected-reply"].includes(error.category)
+          )
+            terminal = error;
+          throw error;
+        }
+        await run(Effect.sleep(Math.min(100, limits.remaining())));
+      }
+    }
+  }
+
+  /** Rejects overlapping or escaped sends; finalization owns the one pending operation. */
+  const send: BatchSender = (frame) => {
+    if (closed || pending)
+      return Promise.reject(new SessionError("invalid-session"));
+    pending = submit(frame).finally(() => {
+      pending = undefined;
+    });
+    return pending;
+  };
+  try {
+    const result = await use(send);
+    if (pending) throw new SessionError("invalid-session");
+    return result;
+  } finally {
+    closed = true;
+    controller.abort();
+    await pending?.catch(() => {});
+    await retire();
+  }
 }
 
 /** Sanitized observations only; a denial means no successful ACK, not proof of server validation. */

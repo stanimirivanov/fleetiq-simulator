@@ -51,8 +51,30 @@ Downtime does not advance capture, queue age or device time, and the frozen pend
 batch drains under the existing ACK rules before remaining scheduled ticks.
 The timing selector is part of the config binding: changing it while resuming an
 existing checkpoint rejects with `spool-mismatch`. Accelerated behavior and
-existing configs remain unchanged. This addition does not retain a TCP connection
-between separate durable batches; that prerequisite remains a separate change.
+existing configs remain unchanged.
+
+## Persistent session ownership
+
+The default `single-batch` policy still retires each socket after its matching
+ACK. Explicit `persistent-compliant-peer` retains one lazy TCP session across
+capture/send ticks and pacing waits within the invocation. It logs in only when
+there is eligible pending work. A peer idle/lifetime closure reconnects on the
+next send; no heartbeat records are invented. Process restart always uses a fresh
+login, while the durable cursor and frozen pending packet remain authoritative.
+
+All sends share one real run budget. A failed exchange releases its Effect scope
+before bounded retry of the same bytes. The spool removes work only after an
+exact count ACK, then persists the existing atomic checkpoint update. A lost ACK
+or failed checkpoint commit can still repeat remote acceptance; there is no
+exactly-once claim. Wrong/refused/surplus replies retain the existing blocking
+behavior. Compliant-peer mode still assumes one ACK per batch: a count-only ACK
+cannot identify an arbitrary delayed duplicate from an earlier equal-count batch.
+
+The sender releases retained sockets on completion, cancellation or callback/
+checkpoint failure before the CLI emits a cumulative success receipt. The
+one-shot, command-fixture and fault APIs retain their existing lifetime rules.
+This producer support does not replace real installed idle/lifetime and restart
+qualification in deployment SIM-PR17.
 
 ## Checkpoint and recovery contract
 

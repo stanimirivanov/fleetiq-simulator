@@ -849,7 +849,7 @@ async function runPlayback(
   identity: string,
   resume: boolean,
   signal: AbortSignal,
-  perform: typeof import("./transport/tcp.ts").sendBatches,
+  withSender: typeof import("./transport/tcp.ts").withBatchSender,
   acknowledge: (receipt: DeliveryReceipt) => void,
 ): Promise<number> {
   const p = config.playback;
@@ -888,55 +888,57 @@ async function runPlayback(
             (ms) => new Promise<void>((done) => setTimeout(done, ms)),
           )
         : undefined;
-    let last: SessionError | undefined;
-    let blocked = false;
-
-    /** A failing count/refusal blocks further sends this run; ordinary outage may retry at the next send tick. */
-    async function drain(): Promise<void> {
-      for (let frame = spool.prepare(); frame; frame = spool.prepare()) {
-        try {
-          await perform([frame], {
-            ...options,
-            totalDeadlineMs: Math.ceil(budget.remaining()),
-          });
-          spool.acknowledge(frame);
-        } catch (error) {
-          if (
-            !(error instanceof SessionError) ||
-            error.category === "cancelled" ||
-            error.category === "run-timeout" ||
-            error.category === "invalid-session"
-          )
-            throw error;
-          last = error;
-          blocked = ["login-refused", "ack-count", "unexpected-reply"].includes(
-            error.category,
-          );
-          return;
-        }
-      }
-    }
-
     try {
-      if (resume && spool.stats.atMs >= p.offlineUntilMs) await drain();
-      while (spool.stats.cursor < work.length) {
-        if (signal.aborted) throw new SessionError("cancelled");
-        budget.remaining();
-        const next = work[spool.stats.cursor];
-        if (!next) throw new SessionError("invalid-session");
-        if (pacer) await pacer.waitUntil(next.atMs);
-        const send = spool.advance();
-        if (send && spool.stats.atMs >= p.offlineUntilMs && !blocked)
-          await drain();
-        await new Promise<void>((done) => setImmediate(done));
-      }
-      if (signal.aborted) throw new SessionError("cancelled");
-      if (spool.stats.queued)
-        throw last ?? new SessionError("connection-closed");
-      acknowledge({
-        status: "acknowledged",
-        recordCount: spool.stats.acknowledged,
-      });
+      const recordCount = await withSender(
+        { ...options, totalDeadlineMs: Math.ceil(budget.remaining()) },
+        async (send) => {
+          let last: SessionError | undefined;
+          let blocked = false;
+
+          /** A failing count/refusal blocks further sends this run; ordinary outage may retry at the next send tick. */
+          async function drain(): Promise<void> {
+            for (let frame = spool.prepare(); frame; frame = spool.prepare()) {
+              try {
+                await send(frame);
+                spool.acknowledge(frame);
+              } catch (error) {
+                if (
+                  !(error instanceof SessionError) ||
+                  error.category === "cancelled" ||
+                  error.category === "run-timeout" ||
+                  error.category === "invalid-session"
+                )
+                  throw error;
+                last = error;
+                blocked = [
+                  "login-refused",
+                  "ack-count",
+                  "unexpected-reply",
+                ].includes(error.category);
+                return;
+              }
+            }
+          }
+
+          if (resume && spool.stats.atMs >= p.offlineUntilMs) await drain();
+          while (spool.stats.cursor < work.length) {
+            if (signal.aborted) throw new SessionError("cancelled");
+            budget.remaining();
+            const next = work[spool.stats.cursor];
+            if (!next) throw new SessionError("invalid-session");
+            if (pacer) await pacer.waitUntil(next.atMs);
+            const sendDue = spool.advance();
+            if (sendDue && spool.stats.atMs >= p.offlineUntilMs && !blocked)
+              await drain();
+            await new Promise<void>((done) => setImmediate(done));
+          }
+          if (signal.aborted) throw new SessionError("cancelled");
+          if (spool.stats.queued)
+            throw last ?? new SessionError("connection-closed");
+          return spool.stats.acknowledged;
+        },
+      );
+      acknowledge({ status: "acknowledged", recordCount });
       return 0;
     } catch (error) {
       if (error instanceof SessionError && error.category === "cancelled")
@@ -1038,7 +1040,7 @@ export async function runTcp(
         return 0;
       }
 
-      const { sendBatches, sendFaultBatches } = await import(
+      const { sendBatches, sendFaultBatches, withBatchSender } = await import(
         "./transport/tcp.ts"
       );
       if (task.kind === "fault") {
@@ -1064,7 +1066,7 @@ export async function runTcp(
           identity,
           args[0] === "resume",
           signal,
-          sendBatches,
+          withBatchSender,
           acknowledge,
         );
       const receipt = await sendBatches(
