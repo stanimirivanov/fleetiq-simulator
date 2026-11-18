@@ -84,6 +84,8 @@ const reviewedPaths = new Set([
   "src/scenarios/profile.ts",
   "tests/scenarios/route.test.ts",
   "src/session/state.ts",
+  "src/session/pacing.ts",
+  "tests/session/pacing.test.ts",
   "src/transport/tcp.ts",
   "src/wire/codec8.ts",
   "src/wire/codec8e.ts",

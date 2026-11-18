@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { run as runCli } from "../../src/cli.ts";
+import { run as runCli, runTcp } from "../../src/cli.ts";
 import { login, withPeer } from "../support/peers/peer.ts";
 
 test("durable CLI captures through outage and resumes frozen FIFO work without new captures", {
@@ -105,6 +105,126 @@ test("playback validation checks private inputs offline without creating checkpo
     );
     assert.deepEqual(errors, []);
     assert.equal(existsSync(join(directory, "private-state")), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("real-time playback validates offline and releases captures on monotonic time", {
+  timeout: 5000,
+}, async () => {
+  const { existsSync } = await import("node:fs");
+  const { playbackConfig } = await import(
+    "../support/playback/playback-fixture.ts"
+  );
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-paced-"));
+  const received: { at: number; timestamp: string }[] = [];
+  try {
+    await withPeer(
+      async (socket) => {
+        const read = await login(socket);
+        socket.write(Buffer.from([1]));
+        const header = await read(8);
+        const rest = await read(header.readUInt32BE(4) + 4);
+        const packet = Buffer.concat([header, rest]);
+        received.push({
+          at: performance.now(),
+          timestamp: packet.readBigUInt64BE(10).toString(),
+        });
+        const ack = Buffer.alloc(4);
+        ack.writeUInt32BE(packet[9] ?? 0);
+        socket.end(ack);
+      },
+      async (port) => {
+        const config = playbackConfig(directory, port);
+        config.playback.timingProfile = "real-time";
+        config.playback.intervalMs = 100;
+        config.playback.sendIntervalMs = 100;
+        config.playback.offlineUntilMs = 0;
+        config.playback.maxRecords = 1;
+        config.retry.totalDeadlineMs = 3000;
+        const scenario = JSON.parse(
+          readFileSync(join(directory, "scenario.json"), "utf8"),
+        );
+        scenario.phases[0].durationMs = 200;
+        writeFileSync(
+          join(directory, "scenario.json"),
+          JSON.stringify(scenario),
+        );
+        writeFileSync(join(directory, "config.json"), JSON.stringify(config));
+        const errors: string[] = [];
+        assert.equal(
+          runCli(
+            ["validate", "--config", join(directory, "config.json")],
+            (e) => errors.push(e),
+          ),
+          0,
+        );
+        assert.equal(existsSync(join(directory, "private-state")), false);
+        const receipts: unknown[] = [];
+        assert.equal(
+          await runTcp(
+            ["run", "--config", join(directory, "config.json")],
+            (e) => errors.push(e),
+            new AbortController().signal,
+            (r) => receipts.push(r),
+          ),
+          0,
+        );
+        assert.deepEqual(errors, []);
+        assert.deepEqual(receipts, [
+          { status: "acknowledged", recordCount: 3 },
+        ]);
+        assert.deepEqual(
+          received.map((r) => r.timestamp),
+          ["1000000", "1000100", "1000200"],
+        );
+        assert.ok((received[2]?.at ?? 0) - (received[1]?.at ?? Infinity) >= 50);
+      },
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("real-time wait cancellation retains the capture cursor and emits no success receipt", async () => {
+  const { playbackConfig } = await import(
+    "../support/playback/playback-fixture.ts"
+  );
+  const directory = mkdtempSync(join(tmpdir(), "fleetiq-paced-cancel-"));
+  const controller = new AbortController();
+  let receipt = false;
+  const errors: string[] = [];
+  try {
+    const config = playbackConfig(directory, 55027);
+    config.playback.timingProfile = "real-time";
+    writeFileSync(join(directory, "config.json"), JSON.stringify(config));
+    const timer = setTimeout(() => controller.abort(), 20);
+    try {
+      assert.equal(
+        await runTcp(
+          ["run", "--config", join(directory, "config.json")],
+          (e) => errors.push(e),
+          controller.signal,
+          () => {
+            receipt = true;
+          },
+        ),
+        130,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    assert.equal(receipt, false);
+    assert.deepEqual(errors, ["cancelled"]);
+    const state = JSON.parse(
+      JSON.parse(
+        readFileSync(join(directory, "private-state/checkpoint.json"), "utf8"),
+      ).body,
+    );
+    assert.equal(state.captured, 1);
+    assert.equal(state.acknowledged, 0);
+    assert.equal(state.atMs, 0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -18,3 +18,9 @@ counts and commits removal only for the exact pending handle. `spool.ts` couples
 Checkpoint errors must preserve authoritative bytes and fixed categories. A failed
 write poisons memory; resume revalidates bindings and frozen FIFO bytes before send.
 Use `node --test tests/session/spool.test.ts` for process death and exact replay.
+
+
+`pacing.ts` owns monotonic virtual-tick scheduling with injected clock, wait and
+budget ports. It performs no ambient timing or IO. Keep resume origins tied to
+the retained virtual cursor and preserve deadline/cancellation checks while
+waiting. Run `node --test tests/session/pacing.test.ts` for this policy.
