@@ -11,7 +11,7 @@
     "test": "cd .. && node --test \"harness/tests/**/*.test.mjs\"",
     "typecheck": "tsc -p config/tsconfig.json",
     "audit": "pnpm audit --audit-level high",
-    "check": "pnpm typecheck && pnpm test && pnpm audit --audit-level high",
+    "check": "pnpm typecheck && pnpm test && pnpm run audit:approved",
     "lint:product": "cd .. && harness/node_modules/.bin/biome ci . --config-path=harness/config/biome.json --error-on-warnings && pnpm lint:comments && pnpm lint:source-comments",
     "lint:comments": "cd .. && harness/node_modules/.bin/eslint --config harness/config/eslint.config.mjs harness/src harness/support && pnpm lint:packaging",
     "lint:packaging": "cd .. && harness/node_modules/.bin/eslint --config harness/config/eslint.config.mjs packaging",
