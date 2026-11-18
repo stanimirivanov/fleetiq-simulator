@@ -252,8 +252,12 @@ export function run(
     }
     if (command === "validate" && validFaultConfig(value)) {
       const task = selectFault(value);
-      const identity = readIdentity(task.config, dirname(input));
-      const alternate = readAlternate(task.config, dirname(input));
+      const [identity, alternate] = readIdentitySelection(
+        task.config,
+        dirname(input),
+        false,
+        task.config.unregisteredDeviceId,
+      );
       planFaults(task.frames, task.config.faults, identity, alternate);
       return 0;
     }
@@ -399,13 +403,6 @@ function selectFault(value: unknown) {
     config: value,
     frames: value.records.map(encodeAvlRecord),
   };
-}
-
-/** Alternate identities remain private file entries; operators must independently verify they are unregistered. */
-function readAlternate(config: FaultRunConfig, root: string) {
-  return config.unregisteredDeviceId
-    ? readIdentity({ ...config, deviceId: config.unregisteredDeviceId }, root)
-    : undefined;
 }
 
 /** UDP is an explicit loopback reference-peer config, never a FleetIQ compatibility transport. */
@@ -769,27 +766,49 @@ function readIdentity(
   root: string,
   strict = false,
 ): string {
+  return readIdentitySelection(config, root, strict)[0];
+}
+
+/** Reads one private snapshot with exactly the primary and optional distinct fault selection; rejects unused or malformed entries. */
+function readIdentitySelection(
+  config: Pick<RunConfig, "identityFile" | "deviceId">,
+  root: string,
+  strict = false,
+  alternateId?: string,
+): readonly [string, string | undefined] {
   try {
     const identities = readInput(
       resolve(root, config.identityFile),
       strict ? "spool" : true,
     );
+    const selected =
+      alternateId === undefined
+        ? [config.deviceId]
+        : [config.deviceId, alternateId];
     if (
       identities === null ||
       typeof identities !== "object" ||
       Array.isArray(identities) ||
-      Object.keys(identities).length !== 1 ||
-      !Object.hasOwn(identities, config.deviceId)
+      new Set(selected).size !== selected.length ||
+      Object.keys(identities).length !== selected.length ||
+      !selected.every((id) => Object.hasOwn(identities, id))
     )
       throw new InputError("invalid-identity-file");
-    const value = (identities as Record<string, unknown>)[config.deviceId];
-    if (
-      typeof value !== "string" ||
-      value.length !== 15 ||
-      /[^0-9]/u.test(value)
-    )
-      throw new InputError("invalid-identity-file");
-    return value;
+
+    // Both selections are validated from this single read; alternate lookup cannot reopen changed bytes.
+    const values = selected.map((id) => {
+      const value = (identities as Record<string, unknown>)[id];
+      if (
+        typeof value !== "string" ||
+        value.length !== 15 ||
+        /[^0-9]/u.test(value)
+      )
+        throw new InputError("invalid-identity-file");
+      return value;
+    });
+    const primary = values[0];
+    if (primary === undefined) throw new InputError("invalid-identity-file");
+    return [primary, values[1]];
   } catch (error) {
     if (error instanceof InputError)
       throw new InputError("invalid-identity-file");
@@ -1021,10 +1040,11 @@ export async function runTcp(
             ? 130
             : 3;
       }
-      const identity = readIdentity(
+      const [identity, alternate] = readIdentitySelection(
         task.config,
         inputRoot?.root ?? dirname(path),
         Boolean(inputRoot) || task.kind === "udp",
+        task.kind === "fault" ? task.config.unregisteredDeviceId : undefined,
       );
       if (task.kind === "udp") {
         const { sendUdp } = await import("./transport/udp.ts");
@@ -1053,7 +1073,7 @@ export async function runTcp(
             ...config.retry,
             identity,
             signal,
-            unregisteredIdentity: readAlternate(task.config, dirname(path)),
+            unregisteredIdentity: alternate,
           },
         );
         observeFault(receipt);
