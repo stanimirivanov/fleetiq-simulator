@@ -31,3 +31,11 @@ product targets. Probe functions belong to CLI/harness IO owners. Verify with
 only; reject FleetIQ/Compose UDP admission. Check endpoint, both IDs and exact
 count, bound ignored replies/retries and preserve frozen bytes until ACK. Run
 `node --test tests/transport/udp.test.ts`; never place dgram IO in session or wire.
+
+
+`withBatchSender` in `tcp.ts` owns one lazy cross-tick Effect scope for durable
+playback. Its serial send port snapshots one packet, shares one run budget and
+retires uncertain sockets before retry. The callback must await sends and check
+budget/cancellation during idle work; it must not emit success before the owner
+returns. Keep strict defaults and compliant-peer ACK assumptions. Run
+`node --test tests/transport/durable-tcp.test.ts` for these lifetime controls.

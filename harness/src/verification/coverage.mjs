@@ -54,6 +54,7 @@ export const groups = [
     tests: [
       "tests/transport/tcp-acknowledgement.test.ts",
       "tests/transport/tcp-recovery.test.ts",
+      "tests/transport/durable-tcp.test.ts",
       "tests/transport/tcp-deadlines.test.ts",
       "tests/session/bounds.test.ts",
       "tests/session/pacing.test.ts",
@@ -102,6 +103,7 @@ export const groups = [
       "tests/cli/failure-reporting.test.ts",
       "tests/cli/delivery-receipts.test.ts",
       "tests/cli/playback-recovery.test.ts",
+      "tests/cli/persistent-playback.test.ts",
       "tests/cli/process-interruption.test.ts",
       "tests/cli/faults.test.ts",
       "tests/cli/fleet.test.ts",

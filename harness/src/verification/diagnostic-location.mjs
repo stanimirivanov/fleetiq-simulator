@@ -104,6 +104,8 @@ const reviewedPaths = new Set([
   "tests/wire/codec8.test.ts",
   "tests/support/wire/codec8-fixture.ts",
   "tests/cli/playback-recovery.test.ts",
+  "tests/cli/persistent-playback.test.ts",
+  "tests/transport/durable-tcp.test.ts",
   "tests/cli/process-interruption.test.ts",
   "tests/cli/faults.test.ts",
   "tests/cli/fleet.test.ts",
