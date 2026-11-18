@@ -25,7 +25,7 @@ FD/elapsed cleanup). It is part of canonical `pnpm check`; retain its negative
 controls and do not replace observations with device-count estimates.
 
 
-## Approved, staged harness exception — issue #96
+## Approved harness exception — issue #96
 
 Owner: @stanimirivanov. Approval: explicit maintainer approval of
 [issue #96](https://github.com/stanimirivanov/fleetiq-simulator/issues/96).
@@ -41,11 +41,11 @@ Unknown data, audit errors, changed scope, a published patch in the advisory,
 critical escalation, any unrelated high/critical finding, and expiry fail closed.
 Product audits, secrets, and image scanning have no exception.
 
-This PR stages the policy and exact trusted-floor transitions. Existing canonical
-and private `check` commands retain the native audit until a follow-up activation
-PR uses the merged trusted checker. Publication and scheduled scans then inherit
-the same policy through their existing canonical entry points. No global ignore
-list, skipped audit, severity reduction or new dependency is introduced.
+Canonical `security:harness` and the private package's `check` invoke the same
+`audit:approved` policy through the exact command transitions reviewed in PR #99.
+Publication and scheduled scans inherit it through unchanged canonical entry
+points. No global ignore list, skipped audit, severity reduction or new dependency
+is introduced. The native product audit remains unchanged.
 
 Each policy invocation keeps unfiltered native JSON and exit status in a new
 0700 temporary directory named `fleetiq-harness-audit-*`, with 0600 files. These

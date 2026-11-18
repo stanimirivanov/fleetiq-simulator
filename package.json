@@ -27,7 +27,7 @@
     "image:qualify": "node harness/src/qualification/image/image-qualify.mjs",
     "lint:source-comments": "pnpm --dir harness run lint:source-comments",
     "test:bounds": "node harness/src/qualification/fleet/fleet-bounds.mjs",
-    "security:harness": "pnpm --dir harness audit --audit-level high",
+    "security:harness": "pnpm --dir harness run audit:approved",
     "test:harness": "pnpm --dir harness test"
   },
   "dependencies": {

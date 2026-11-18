@@ -114,6 +114,22 @@ test("PR workflow retains its required check, full history and live security gat
     readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
   ).scripts;
   assert.match(scripts.check, /&& pnpm security$/);
+  const harness = JSON.parse(
+    readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+  );
+  assert.equal(
+    scripts["security:harness"],
+    "pnpm --dir harness run audit:approved",
+  );
+  assert.equal(
+    harness.scripts.check,
+    "pnpm typecheck && pnpm test && pnpm run audit:approved",
+  );
+  assert.equal(
+    harness.scripts["audit:approved"],
+    "node src/security/audit.mjs",
+  );
+  assert.equal(harness.scripts.audit, "pnpm audit --audit-level high");
   assert.equal(
     scripts.security,
     "pnpm secrets && pnpm audit --audit-level high && pnpm security:harness",
