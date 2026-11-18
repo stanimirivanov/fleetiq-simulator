@@ -216,6 +216,46 @@ function harnessCommand(file, name, before, after, root) {
 }
 
 /**
+ * Stages issue #96's exact audit delegates for a later activation PR. Trusted-base
+ * execution prevents this candidate from authorizing its own script replacement.
+ * @param {string} file @param {string} name @param {unknown} before
+ * @param {unknown} after @param {string} root
+ */
+function auditCommand(file, name, before, after, root) {
+  const reviewed =
+    (file === "package.json" &&
+      name === "security:harness" &&
+      before === "pnpm --dir harness audit --audit-level high" &&
+      after === "pnpm --dir harness run audit:approved") ||
+    (file === "harness/package.json" &&
+      name === "check" &&
+      before ===
+        "pnpm typecheck && pnpm test && pnpm audit --audit-level high" &&
+      after === "pnpm typecheck && pnpm test && pnpm run audit:approved");
+  if (
+    !reviewed ||
+    ![
+      "harness/package.json",
+      "harness/src/security/audit.mjs",
+      "harness/config/audit-exception.json",
+      "harness/pnpm-lock.yaml",
+    ].every((path) => regularDestination(root, path))
+  )
+    return false;
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(root, "harness/package.json"), "utf8"),
+    );
+    return (
+      manifest.private === true &&
+      manifest.scripts?.["audit:approved"] === "node src/security/audit.mjs"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Selects the policy actually invoked, refusing ambiguous or unrecognized bindings.
  * Fixtures without a coverage script must contain the canonical policy.
  * @param {Record<string, unknown>} scripts @param {(path: string) => boolean} exists
@@ -580,6 +620,7 @@ export function checkFloor(base, root = ".") {
           newScripts[name] !== command &&
           !additiveCommand(command, newScripts[name], newScripts) &&
           !harnessCommand(file, name, command, newScripts[name], root) &&
+          !auditCommand(file, name, command, newScripts[name], root) &&
           !(
             name === "check" &&
             newScripts[name] === `pnpm floor && ${command}` &&

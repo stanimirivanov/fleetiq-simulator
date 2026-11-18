@@ -1,0 +1,7 @@
+{
+  "approved": true,
+  "advisory": "GHSA-fc5q-39xc-vjpf",
+  "owner": "stanimirivanov",
+  "expiresAt": "2026-11-25T00:00:00Z",
+  "lockSha256": "5844c38ad0879d637de831d1e8ac90edd495ee935925eaf93fb36f73323ddb9a"
+}
