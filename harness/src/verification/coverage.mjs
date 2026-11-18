@@ -142,6 +142,8 @@ export const groups = [
       "harness/tests/image/publication.test.mjs",
       "harness/tests/qualification/platform-decoder.test.mjs",
       "harness/tests/security/scanner.test.mjs",
+      "harness/tests/security/audit.test.mjs",
+      "harness/tests/floor/audit-transition.test.mjs",
       "harness/tests/architecture/transport-load.test.mjs",
       "harness/tests/verification/typecheck.test.mjs",
       "harness/tests/workflows/policy.test.mjs",
