@@ -13,7 +13,11 @@ owned/private and sibling-only. Optional `unregisteredDeviceId` selects a second
 logical entry in that same private file. Operators must independently ensure it
 is authorized for testing and unregistered on this target; the simulator cannot
 query or prove server registration. It must differ from the ordinary identity.
-Never put device identities in the fault plan or attach private run files.
+Fault identity maps contain exactly the primary selection and, when configured,
+the distinct `unregisteredDeviceId` selection. Both values are validated from one
+private file snapshot; missing, malformed or unused entries are refused. Ordinary
+single-device runs still require exactly one entry. Never put device identities
+in the fault plan or attach private run files.
 
 Copy the contents of [scenarios/faults.json](../scenarios/faults.json) into the
 `faults` property, and provide eight record inputs to exercise that example.
