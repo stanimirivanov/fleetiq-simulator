@@ -1,5 +1,7 @@
 # Wire encoding
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Keep record encoding deterministic and independent of sockets, files, time and
 Effect. The architecture gate catches reviewed ambient APIs such as Date,
 Math.random, fetch, and globalThis while allowing local shadowing. Treat this
@@ -16,7 +18,6 @@ Wire owns the AVL payload, TCP envelope, CRC and declared record count.
 `Codec8Frame` retains a private validated byte snapshot and exposes copies.
 Transport consumes that snapshot and its count together. Keep raw Buffer
 admission and frame validation in wire when changing future codecs.
-
 
 Legacy factories remain single-record. `fromExtendedBatchBytes` admits 1–16
 complete Extended records within 1280 TCP bytes; `combineCodec8e` derives both

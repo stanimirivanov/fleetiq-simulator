@@ -1,5 +1,7 @@
 # Private checkpoint adapter
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Own filesystem and SQLite effects here; session code owns checkpoint policy and
 state through an immutable-string persistence port. Storage may depend on session,
 node:fs/crypto/sqlite; no dependency on CLI, transport or scenario state.

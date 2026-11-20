@@ -1,5 +1,7 @@
 # Verification fixtures
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Use `node:test` and `node:assert/strict`. Put behavior tests in `*.test.ts` and
 tooling tests in `*.test.mjs`. Check observable bytes, exit codes and socket
 lifetime. Keep the peer independent of the production session. Use bounded

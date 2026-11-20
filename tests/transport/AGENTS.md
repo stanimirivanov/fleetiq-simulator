@@ -1,5 +1,7 @@
 # Transport acceptance
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Separate TCP acknowledgement, uncertain-acceptance recovery, deadlines and
 Compose DNS from pure session/command state. Keep command exchange, fault, fleet
 and UDP acceptance in their own suites. Small TCP frame/options setup stays

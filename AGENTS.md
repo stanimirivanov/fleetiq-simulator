@@ -1,5 +1,17 @@
 # FleetIQ simulator
 
+## Workflow authority
+
+Use installed `mattpocock/skills` as the primary workflow for matching tasks.
+Discover and load skills on demand. When workflows overlap, use the matching
+Matt Pocock skill rather than a parallel workflow. Use other skills only for
+capabilities not covered by that workflow or when explicitly requested.
+
+Repository guidance supplies technical constraints, architecture boundaries and
+verification requirements. Scoped `AGENTS.md` files are subordinate for workflow
+decisions and add only module-specific constraints. Explicit user instructions
+and host permissions remain authoritative.
+
 Start with the issue and the nearest guide below. The simulator uses strict
 TypeScript ESM; runtime, package-manager and dependency pins are in
 [package.json](package.json). Keep source compatible with Node's native
@@ -25,17 +37,27 @@ that a reader cannot infer from the code. Cite an independent source for literal
 wire fixtures. Keep identities, captures and private settings out of the checkout
 and evidence.
 
-- **Plan.** Record the intended behavior, affected owner, acceptance test and
-  final gate in the issue or working notes. Identify compatibility changes before
-  editing.
-- **Execute.** Make one bounded change. For behavior changes, show the new
-  regression failing for the intended reason before implementing it. Keep the
-  verification floor intact.
-- **Verify.** Run the narrow reproduction, then `pnpm check:fast` and
+- Verification: Run the narrow reproduction, then `pnpm check:fast` and
   `pnpm check` before delivery. Inspect the first failure, distinguish a code
   failure from a tool failure, fix the cause and rerun the failing stage.
   Report exact commands and results, including incomplete checks. Run
   `pnpm security` on the final lockfile before opening the PR.
 
-Use the agreed issue and PR workflow. Stage only the task's files. Keep installed
+Keep installed
 product and physical device qualification evidence separate from simulator tests.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `stanimirivanov/fleetiq-simulator`.
+See [issue tracker](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Use the five configured roles. See [triage labels](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context glossary and repository-owned decisions.
+See [domain docs](docs/agents/domain.md).

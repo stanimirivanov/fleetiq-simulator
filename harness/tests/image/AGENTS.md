@@ -1,5 +1,7 @@
 # Image acceptance
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Keep immutable candidate metadata and source snapshots in `candidate-source.test.mjs`;
 scanner reports, binary normalization and independent USTAR controls in
 `layer-scanning.test.mjs`; and image workflow/runtime wiring in
@@ -15,5 +17,4 @@ strings must remain unchanged.
 
 Run `node --test "harness/tests/image/*.test.mjs"` from the repository root.
 `pnpm check` registers these suites once in the existing serial tooling group.
-This refactor must not publish an image or alter qualification, workflow, scanner
-or production policy.
+Image qualification is separate from publication; preserve scanner and production policy.

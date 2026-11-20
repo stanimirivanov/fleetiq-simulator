@@ -1,5 +1,7 @@
 # Session policy
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 `state.ts` owns validated session settings, the monotonic run budget and typed
 failure categories. Use the injected monotonic clock for budget assertions.
 Session may depend on wire contracts and Ajv for closed checkpoint validation. Transport adapters consume session
@@ -9,7 +11,6 @@ independent of transport and the CLI.
 Run `node --test tests/session/bounds.test.ts` for session bounds and
 `node --test tests/transport/tcp-acknowledgement.test.ts` for TCP behavior.
 
-
 `batches.ts` owns the bounded FIFO and stable pending handle. Freeze bytes at
 enqueue; peek must not remove data. Acknowledgement reads wire-owned private
 counts and commits removal only for the exact pending handle. `spool.ts` couples FIFO/cursor state to a durable persistence port;
@@ -18,7 +19,6 @@ counts and commits removal only for the exact pending handle. `spool.ts` couples
 Checkpoint errors must preserve authoritative bytes and fixed categories. A failed
 write poisons memory; resume revalidates bindings and frozen FIFO bytes before send.
 Use `node --test tests/session/spool.test.ts` for process death and exact replay.
-
 
 `pacing.ts` owns monotonic virtual-tick scheduling with injected clock, wait and
 budget ports. It performs no ambient timing or IO. Keep resume origins tied to

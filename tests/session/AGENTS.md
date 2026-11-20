@@ -1,5 +1,7 @@
 # Session policy and durable state
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Keep bounds, FIFO ownership, durable spool recovery and command state in their
 named suites. Command-state tests exercise the state machine without a TCP peer;
 real command exchanges belong in `../transport/`. Bounds tests retain the

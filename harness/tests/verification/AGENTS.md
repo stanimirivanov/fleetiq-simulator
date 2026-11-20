@@ -1,5 +1,7 @@
 # Verification acceptance
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 `coverage.test.mjs` owns discovery/inventory, subprocess-only source coverage,
 missing-source rejection and the native uncovered-branch canary. Keep the passing
 and failing controls together; do not pool coverage or change thresholds.
