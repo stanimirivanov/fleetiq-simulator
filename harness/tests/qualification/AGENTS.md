@@ -1,5 +1,7 @@
 # Qualification acceptance
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 `fleet-bounds.test.mjs` owns synthetic report acceptance and rejection for measured
 resource bounds. Preserve both product/reference-peer passing controls and every
 excess, missing-measurement and private-field rejection. Real Linux measurements

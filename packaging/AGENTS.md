@@ -1,5 +1,7 @@
 # Product image packaging
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 This tree belongs to the product build. Keep it independent of `tools/` and
 `harness/`; Docker must be able to build without copying either tree. TypeScript
 is an existing build dependency used to preserve executable JavaScript literals

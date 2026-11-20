@@ -1,5 +1,7 @@
 # Verification-floor self-tests
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Keep preservation and renames, computed controls, script policy, baseline/history,
 trusted-base execution, input hygiene, reviewed relocations and exact harness
 command transitions in their named

@@ -1,5 +1,7 @@
 # CLI behavior and recovery
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Run these suites from the repository root; subprocesses deliberately exercise
 `src/cli.ts` with independent peers and owned temporary inputs. Keep offline
 encoding, configuration, identity, error reporting and receipts in their named
@@ -12,7 +14,6 @@ deadlines; do not combine cold subprocess runs under one timeout.
 existing serial CLI coverage group. Keep that source denominator and threshold
 unchanged. Preserve real subprocess interruption and byte-exact resume checks;
 fixture modules live under `tests/support/` without a `.test` suffix.
-
 
 `persistent-playback.test.ts` owns cross-tick login reuse and frozen pending
 resume through the real CLI. Keep exact source timestamps, ACK-only removal and

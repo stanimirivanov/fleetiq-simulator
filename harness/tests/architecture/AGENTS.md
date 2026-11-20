@@ -1,5 +1,7 @@
 # Architecture acceptance
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Keep primitive dependency direction, import resolution and cycles in
 `dependencies.test.mjs`. Keep runtime loading, ambient capabilities and effect
 ownership across transport, scenarios, storage and telemetry in

@@ -1,5 +1,7 @@
 # Verification tooling
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Use Node ESM and existing pinned tools. Keep the same `pnpm check:fast` entry
 point for the optional hook and CI, with `pnpm check` authoritative. Exit
 nonzero on violations or tool errors. Use stable, actionable diagnostic categories
@@ -44,14 +46,12 @@ the total count and safe metadata for the first finding. Unreviewed names and
 locations are withheld. Inspect the affected scan privately when metadata is
 withheld or when multiple findings are present. Never attach a raw report.
 
-
 `pnpm floor` checks against fetched origin/main's merge base; an explicit full
 ancestor SHA reproduces PR results. Preserve base-revision execution in PR CI
 and its exact-SHA bootstrap restriction. Add Git fixtures when changing the
 floor sensor. Never add a self-approved bypass or print candidate comment/test
 text. CODEOWNERS and the external main ruleset govern deliberate policy changes;
 see docs/HARNESS.md for qualification and intentional-maintenance procedures.
-
 
 The private package owns verification, qualification, publication, configuration
 and self-tests. Product imports must never depend on it or legacy tools. Run

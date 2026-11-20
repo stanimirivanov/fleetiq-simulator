@@ -1,5 +1,7 @@
 # Product test support
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 `wire/` owns literal vectors, generated corpora and independent reference decoders;
 retain provenance and licensing. `peers/` owns independent TCP/UDP servers and
 command vectors. `playback/` owns synthetic playback and spool inputs;

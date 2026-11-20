@@ -1,5 +1,7 @@
 # Transport adapters
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 `tcp.ts` owns the Node socket and Effect scope, login, ACK framing and delivery
 retries. Close the scope before retrying and preserve frozen frame bytes.
 Advance the cursor only after an exact count ACK. Strict mode retires the
@@ -31,7 +33,6 @@ product targets. Probe functions belong to CLI/harness IO owners. Verify with
 only; reject FleetIQ/Compose UDP admission. Check endpoint, both IDs and exact
 count, bound ignored replies/retries and preserve frozen bytes until ACK. Run
 `node --test tests/transport/udp.test.ts`; never place dgram IO in session or wire.
-
 
 `withBatchSender` in `tcp.ts` owns one lazy cross-tick Effect scope for durable
 playback. Its serial send port snapshots one packet, shares one run budget and

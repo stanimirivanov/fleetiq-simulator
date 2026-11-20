@@ -1,5 +1,7 @@
 # Source boundaries
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 `cli.ts` owns argument parsing, closed config and private file validation, output
 and exit codes. It adapts those inputs to the encoder and session API. Load the
 TCP adapter with a literal dynamic import inside the network command. Treat caller data, peer replies and
@@ -14,7 +16,6 @@ session persistence port. Session validates checkpoint state without filesystem 
 `transport/` owns handshake and delivery. The CLI composes them. Use explicit relative `.ts` imports so
 Node and the build agree. New top-level source owners require a reviewed
 boundary update in `harness/src/architecture/architecture.mjs`.
-
 
 Follow the [shared JS/TS comment standard](../docs/comment-quality.md). Document
 public contracts and nontrivial named helpers with meaningful JSDoc; explain

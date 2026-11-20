@@ -1,5 +1,7 @@
 # Deterministic playback
 
+Technical constraints for this scope; the repository root `AGENTS.md` owns workflow routing.
+
 Own route kinematics, virtual sample order, last sampled GPS fix and the reviewed
 IO profile. Accept parsed JSON from the caller; do not read files, ambient time,
 randomness, sockets or session state. Only scenario/wire contracts and Ajv are
