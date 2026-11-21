@@ -20,3 +20,6 @@ cross-application installation and integration decisions belong to
 definitions. Keep repository-specific extensions here. Infrastructure terminology
 remains product-neutral. Use repository URLs for external references so this
 checkout works independently of sibling directories.
+
+For terminology, read the [canonical glossary](../../GLOSSARY.md). For module
+ownership, contract boundaries and open decisions, read the [domain map](../domain-model.md).

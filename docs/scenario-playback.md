@@ -3,8 +3,8 @@
 `createPlayback(route, scenario, profile)` in `src/scenarios/route.ts` accepts
 parsed JSON and returns `{ durationMs, sample(elapsedMs) }`. Each sample is a
 version-1 `Record8E` for `encodeCodec8e`, not an already sent packet. Callers own
-file admission and capture/send scheduling. The existing one-record CLI remains
-unchanged; SIM-PR10 will connect capture scheduling. No IO, clocks or randomness
+file admission and capture/send scheduling. The one-record CLI and
+[capture scheduling](capture-batching.md) are separate consumers. No IO, clocks or randomness
 are read by this API.
 
 Load the checked-in `scenarios/normal-day.json` and
@@ -63,5 +63,5 @@ selects GSM strength 3–5; this is deterministic synthetic variation, not RF no
 Playback snapshots input geometry/phases and owns only previous sample time and
 last fix. Reproducing GPS-loss output requires the same ordered sample sequence,
 not just the same final timestamp. Returned records/IO can be mutated without
-changing subsequent samples. Checkpoint persistence is deferred to SIM-PR11.
+changing subsequent samples. Checkpoint persistence is described in [offline recovery](offline-recovery.md).
 `ScenarioError` / `ProfileError` expose fixed categories, without private input.
