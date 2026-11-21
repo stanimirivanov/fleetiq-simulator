@@ -63,7 +63,7 @@ test("image pins Node and pnpm to repository metadata and keeps a nonroot shell-
   );
   assert.match(
     dockerfile,
-    /FROM gcr.io\/distroless\/cc-debian13:nonroot@sha256:[a-f0-9]{64}/,
+    /^FROM gcr.io\/distroless\/base-nossl-debian13:nonroot@sha256:[a-f0-9]{64}$/m,
   );
   assert.match(dockerfile, /USER 65532:65532/);
   assert.match(

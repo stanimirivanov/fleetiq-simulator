@@ -165,9 +165,10 @@ not claim to be committed source. A local image ID is not a registry digest.
 The JavaScript-only runtime removes dependency documentation comments, TypeScript
 sources/types and source maps using the existing TypeScript parser. Executable
 strings, package metadata and licenses remain; real secrets in code still fail
-scanning. No new JavaScript dependency is added. The Dockerfile pins both upstream
-image digests; dependencies use the frozen
-lockfile. Future publication and immutable registry-reference qualification
+scanning. No new JavaScript dependency is added. The Dockerfile pins all upstream image digests. The final Debian base omits
+system OpenSSL because Node bundles its own. The image retains the GCC runtime
+libraries with their Debian package records and licenses. JavaScript dependencies
+use the frozen lockfile. Future publication and immutable registry-reference qualification
 require a separate maintainer action.
 
 For operator runs, keep configuration, identities and outputs outside the checkout
