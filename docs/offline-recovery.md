@@ -1,6 +1,6 @@
 # Durable single-device offline recovery
 
-SIM-PR11 adds `run` / `resume` for a playback config containing
+Durable playback provides `run` / `resume` for a playback config containing
 `playback` instead of `record`. Existing single-record inputs remain compatible;
 `encode` still encodes one record. `validate` checks playback inputs and scheduling
 offline without creating state or loading TCP; it does not qualify an existing
@@ -122,8 +122,9 @@ transmissions; retries may repeat server effects. Expected session failure is 3,
 checkpoint/privacy/resource rejection is 4, invalid input is 2, and unexpected
 programming defects remain redacted internal failures (1). No success receipt is
 emitted for incomplete work. Submission counters count preparations/calls, not
-hidden transport-internal attempts. Fleet, gap/fault scheduling, migrations and
-installed/hardware qualification remain later slices. The byte budget is not an
+hidden transport-internal attempts. [Fleet](fleet.md) and [fault scenarios](fault-scenarios.md) have separate
+contracts. Installed-product and hardware qualification require evidence from
+their respective owners, not checkpoint tests. The byte budget is not an
 RSS or filesystem-volume proof.
 
 SQLite exclusively owns descriptors for its lock database: [closing an unrelated

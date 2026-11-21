@@ -1,8 +1,8 @@
 # Capture triggers and bounded FIFO batching
 
 These APIs compose existing playback and TCP delivery without filesystem or
-transport effects in scenario code. CLI file/spool orchestration belongs to
-SIM-PR11; this slice does not persist records or claim crash recovery.
+transport effects in scenario code. CLI file/spool orchestration and crash recovery are covered by
+[offline recovery](offline-recovery.md); the scenario APIs remain pure.
 
 ## Capture and clocks
 
@@ -56,7 +56,8 @@ exactly its wire-private count and invalidates the handle. Failures retain the
 same pending bytes. Stale, forged or copied handles reject without removal.
 The caller is responsible for invoking acknowledgement only after successful
 delivery. ACK loss still permits remote duplicates; memory state is not a durable
-commit. Commit acknowledgement and cursor atomically when SIM-PR11 adds storage.
+commit. The durable orchestration commits acknowledgement and cursor together; see
+[offline recovery](offline-recovery.md).
 
 Wire adds `combineCodec8e(singleRecordFrames)` and
 `Codec8Frame.fromExtendedBatchBytes(bytes)` for 1–16 records under 1280 bytes.
@@ -70,4 +71,5 @@ Composition: feed capture records into the queue; at each send tick, peek, await
 `sendBatches([pending], realSessionOptions)`, acknowledge that exact handle, and
 repeat until empty. If send fails, retain the head and stop/retry according to
 session policy. Do not dequeue on send attempt or use a receipt's public count
-to override the queue's private metadata. Fleet/fault/durable policies remain later slices.
+to override the queue's private metadata. See [fleet](fleet.md), [faults](fault-scenarios.md) and
+[durable recovery](offline-recovery.md) for their separate policies.
